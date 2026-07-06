@@ -3,6 +3,8 @@ package org.evocraft.evomarkets.shop;
 import org.evocraft.evocore.data.EconomyManager;
 import org.evocraft.evomarkets.init.MarketMenuTypes;
 import org.evocraft.evocore.network.PacketHandler;
+import org.evocraft.evocore.util.EvoCurrencyFormatter;
+import org.evocraft.evomarkets.network.EvoMarketsPacketHandler;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
@@ -181,6 +183,10 @@ public class ShopMenu extends AbstractContainerMenu {
     }
 
     public void performTransaction(String catId, int itemIndex, boolean isBuy, boolean isSell, int amount) {
+        performTransaction(catId, itemIndex, isBuy, isSell, amount, false, false);
+    }
+
+    public void performTransaction(String catId, int itemIndex, boolean isBuy, boolean isSell, int amount, boolean includeBackpackItems, boolean skipBackpackPrompt) {
         ShopConfigManager.ShopCategory cat = ShopConfigManager.get().getCategory(catId);
         if (cat == null || itemIndex < 0 || itemIndex >= cat.items.size()) return;
 
@@ -189,6 +195,13 @@ public class ShopMenu extends AbstractContainerMenu {
         if (baseStack.isEmpty()) return;
 
         String itemName = baseStack.getHoverName().getString();
+        boolean sellAll = amount == -1 && isSell;
+        int backpackHas = sellAll ? BackpackSellCompat.countSellableItems(player, baseStack) : 0;
+
+        if (sellAll && backpackHas > 0 && !skipBackpackPrompt && player instanceof ServerPlayer serverPlayer) {
+            EvoMarketsPacketHandler.sendToPlayer(new EvoMarketsPacketHandler.S2C_BackpackSellPrompt(catId, itemIndex, backpackHas), serverPlayer);
+            return;
+        }
 
         if (amount == -1) {
             if (isBuy) return;
@@ -197,25 +210,25 @@ public class ShopMenu extends AbstractContainerMenu {
                 for(ItemStack i : player.getInventory().items) {
                     if(!i.isEmpty() && i.getItem() == baseStack.getItem()) totalHas += i.getCount();
                 }
-                if (totalHas == 0) {
-                    player.sendSystemMessage(Component.literal("§cNu ai " + itemName + " în inventar!"));
+                if (totalHas == 0 && (!includeBackpackItems || backpackHas == 0)) {
+                    player.sendSystemMessage(Component.literal("§cYou do not have " + itemName + " in your inventory!"));
                     return;
                 }
-                amount = totalHas;
+                amount = totalHas + (includeBackpackItems ? backpackHas : 0);
             }
         }
 
         if (isBuy) {
             double cost = sItem.buyPrice * amount;
             if (EconomyManager.get().getBalance(player.getUUID()) < cost) {
-                player.sendSystemMessage(Component.literal("§cFonduri insuficiente!"));
+                player.sendSystemMessage(Component.literal("§cInsufficient funds!"));
                 return;
             }
 
             ItemStack toGiveTest = baseStack.copy();
             toGiveTest.setCount(amount);
             if (!canFit(player.getInventory(), toGiveTest)) {
-                player.sendSystemMessage(Component.literal("§cInventar plin! Nu ai loc."));
+                player.sendSystemMessage(Component.literal("§cInventory full! You do not have enough space."));
                 return;
             }
 
@@ -223,7 +236,7 @@ public class ShopMenu extends AbstractContainerMenu {
             ItemStack toGive = baseStack.copy();
             toGive.setCount(amount);
             player.getInventory().add(toGive);
-            player.sendSystemMessage(Component.literal("§aAi cumparat " + amount + "x " + itemName + " pentru " + String.format("%.2f", cost) + " Lei"));
+            player.sendSystemMessage(Component.literal("§aYou bought " + amount + "x " + itemName + " for " + EvoCurrencyFormatter.formatWithCurrency(cost)));
             syncMoney();
         }
         else if (isSell) {
@@ -232,16 +245,26 @@ public class ShopMenu extends AbstractContainerMenu {
             for(ItemStack i : player.getInventory().items) {
                 if(i.getItem() == baseStack.getItem()) has += i.getCount();
             }
+            int inventoryHas = has;
+            if (includeBackpackItems) has += backpackHas;
 
             int toSell = Math.min(has, amount);
             if (toSell > 0) {
-                removeItem(player, baseStack.getItem(), toSell);
-                double profit = sItem.sellPrice * toSell;
+                int removed = removeItem(player, baseStack.getItem(), Math.min(inventoryHas, toSell));
+                int remaining = toSell - removed;
+                if (remaining > 0 && includeBackpackItems) {
+                    removed += BackpackSellCompat.removeSellableItems(player, baseStack, remaining);
+                }
+                if (removed <= 0) {
+                    player.sendSystemMessage(Component.literal("Â§cYou do not have " + itemName + " in your inventory!"));
+                    return;
+                }
+                double profit = sItem.sellPrice * removed;
                 EconomyManager.get().addBalance(player.getUUID(), profit);
-                player.sendSystemMessage(Component.literal("§aAi vandut " + toSell + "x " + itemName + " pentru " + String.format("%.2f", profit) + " Lei"));
+                player.sendSystemMessage(Component.literal("§aYou sold " + removed + "x " + itemName + " for " + EvoCurrencyFormatter.formatWithCurrency(profit)));
                 syncMoney();
             } else {
-                player.sendSystemMessage(Component.literal("§cNu ai " + itemName + " în inventar!"));
+                player.sendSystemMessage(Component.literal("§cYou do not have " + itemName + " in your inventory!"));
             }
         }
     }
@@ -261,7 +284,7 @@ public class ShopMenu extends AbstractContainerMenu {
         return false;
     }
 
-    private void removeItem(Player player, Item item, int count) {
+    private int removeItem(Player player, Item item, int count) {
         int left = count;
         for (ItemStack is : player.getInventory().items) {
             if (is.getItem() == item) {
@@ -271,6 +294,7 @@ public class ShopMenu extends AbstractContainerMenu {
                 if (left <= 0) break;
             }
         }
+        return count - left;
     }
 
     @Override public @NotNull ItemStack quickMoveStack(@NotNull Player p, int i) { return ItemStack.EMPTY; }

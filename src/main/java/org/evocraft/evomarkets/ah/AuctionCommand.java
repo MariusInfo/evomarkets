@@ -10,6 +10,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
+import org.evocraft.evocore.util.EvoCurrencyFormatter;
 
 import java.util.List;
 
@@ -17,7 +18,7 @@ public class AuctionCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(Commands.literal("ah")
 
-                // --- VÂNZARE ITEM (/ah sell <pret>) ---
+                // --- SELL ITEM (/ah sell <pret>) ---
                 .then(Commands.literal("sell")
                         .then(Commands.argument("pret", DoubleArgumentType.doubleArg(1.0))
                                 .executes(ctx -> {
@@ -26,23 +27,23 @@ public class AuctionCommand {
                                     ItemStack handItem = player.getMainHandItem();
 
                                     if (handItem.isEmpty()) {
-                                        ctx.getSource().sendFailure(Component.literal("§c[!] Trebuie să ții un item în mână pentru a-l vinde!"));
+                                        ctx.getSource().sendFailure(Component.literal("§c[!] Hold an item in your hand before selling it!"));
                                         return 0;
                                     }
 
-                                    // LIMITA DE 10 ITEME A FOST STEARSA COMPLET DE AICI!
+                                    // The old 10 item limit was removed.
 
                                     AuctionListing listing = new AuctionListing(player.getUUID(), player.getScoreboardName(), handItem.copy(), price);
                                     AuctionMarketManager.get().addListing(listing);
                                     handItem.shrink(handItem.getCount());
 
-                                    ctx.getSource().sendSuccess(() -> Component.literal("§a[AH] Ai pus itemul la vânzare pentru " + price + " Lei!"), false);
+                                    ctx.getSource().sendSuccess(() -> Component.literal("§a[AH] Listed the item for " + EvoCurrencyFormatter.formatWithCurrency(price) + "!"), false);
                                     return 1;
                                 })
                         )
                 )
 
-                // --- ISTORIC VANZARI (/ah istoric) ---
+                // --- SALES HISTORY (/ah istoric) ---
                 .then(Commands.literal("istoric")
                         .executes(ctx -> {
                             try {
@@ -50,14 +51,16 @@ public class AuctionCommand {
                                 List<AuctionHistoryManager.Transaction> list = AuctionHistoryManager.get().getHistory(player.getUUID());
 
                                 if (list.isEmpty()) {
-                                    ctx.getSource().sendFailure(Component.literal("§cNu ai vandut niciun item recent."));
+                                    ctx.getSource().sendFailure(Component.literal("§cYou have not sold any items recently."));
                                     return 0;
                                 }
 
-                                ctx.getSource().sendSystemMessage(Component.literal("§2§l=== ISTORIC VANZARI AH (Ultimele 20) ==="));
+                                ctx.getSource().sendSystemMessage(Component.literal("§2§l=== AH SALES HISTORY (Last 20) ==="));
                                 for (AuctionHistoryManager.Transaction t : list) {
-                                    String line = String.format("§7[%s] §b%s §7cumparat de §e%s §7cu §a%.2f Lei §7(Taxa: §c%.2f§7)",
-                                            t.date, t.itemName, t.buyerName, t.price, t.tax);
+                                    String line = "§7[" + t.date + "] §b" + t.itemName
+                                            + " §7bought by §e" + t.buyerName
+                                            + " §7for §a" + EvoCurrencyFormatter.formatWithCurrency(t.price)
+                                            + " §7(Tax: §c" + EvoCurrencyFormatter.formatWithCurrency(t.tax) + "§7)";
                                     ctx.getSource().sendSystemMessage(Component.literal(line));
                                 }
                             } catch (Exception e) { e.printStackTrace(); }
@@ -65,7 +68,7 @@ public class AuctionCommand {
                         })
                 )
 
-                // --- COMENZI DE ADMIN (/ah admin setstation / removestation) ---
+                // --- ADMIN COMMANDS (/ah admin setstation / removestation) ---
                 .then(Commands.literal("admin")
                         .requires(s -> s.hasPermission(2))
                         .then(Commands.literal("setstation")
@@ -77,7 +80,7 @@ public class AuctionCommand {
 
                                         AuctionStationManager.get().addStation(p.serverLevel(), pos);
 
-                                        ctx.getSource().sendSuccess(() -> Component.literal("§a[AH] Stație setată pe blocul selectat!"), true);
+                                        ctx.getSource().sendSuccess(() -> Component.literal("§a[AH] Station set on the selected block!"), true);
                                     } else {
                                         ctx.getSource().sendFailure(Component.literal("§cTrebuie să te uiți la un bloc!"));
                                     }

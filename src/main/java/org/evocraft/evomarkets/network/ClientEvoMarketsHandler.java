@@ -5,6 +5,7 @@ import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 import org.evocraft.evomarkets.shop.CarShopScreen;
 import org.evocraft.evomarkets.shop.PlaneShopScreen;
+import org.evocraft.evomarkets.shop.ShopScreen;
 
 @OnlyIn(Dist.CLIENT)
 public class ClientEvoMarketsHandler {
@@ -17,6 +18,12 @@ public class ClientEvoMarketsHandler {
 
     public static void openPlaneShop(String jsonData) {
         Minecraft.getInstance().setScreen(new PlaneShopScreen(jsonData));
+    }
+
+    public static void showBackpackSellPrompt(String categoryId, int itemIndex, int backpackCount) {
+        if (Minecraft.getInstance().screen instanceof ShopScreen screen) {
+            screen.showBackpackSellPrompt(categoryId, itemIndex, backpackCount);
+        }
     }
 
     public static void updateAuction() {

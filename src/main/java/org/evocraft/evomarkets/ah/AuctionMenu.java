@@ -3,6 +3,7 @@ package org.evocraft.evomarkets.ah;
 import org.evocraft.evocore.data.EconomyManager;
 import org.evocraft.evomarkets.init.MarketMenuTypes;
 import org.evocraft.evocore.network.PacketHandler;
+import org.evocraft.evocore.util.EvoCurrencyFormatter;
 
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -128,7 +129,7 @@ public class AuctionMenu extends AbstractContainerMenu {
         double bal = EconomyManager.get().getBalance(player.getUUID());
 
         if (bal < listing.price) {
-            player.sendSystemMessage(Component.literal("§cFonduri insuficiente!"));
+            player.sendSystemMessage(Component.literal("§cInsufficient funds!"));
             return;
         }
 
@@ -143,12 +144,12 @@ public class AuctionMenu extends AbstractContainerMenu {
             try {
                 EconomyManager.get().addBalance(listing.sellerUUID, profit);
             } catch (Exception e) {
-                System.out.println("[EvoMarkets] Eroare la adaugarea banilor pentru un jucator offline: " + listing.sellerName);
+                System.out.println("[EvoMarkets] Could not add funds for offline player: " + listing.sellerName);
             }
 
             player.getInventory().add(listing.itemStack);
 
-            player.sendSystemMessage(Component.literal("§aAi cumparat itemul!"));
+            player.sendSystemMessage(Component.literal("§aYou bought the item!"));
 
             AuctionHistoryManager.get().addTransaction(
                     listing.sellerUUID,
@@ -162,7 +163,7 @@ public class AuctionMenu extends AbstractContainerMenu {
             if (server != null) {
                 ServerPlayer seller = server.getPlayerList().getPlayer(listing.sellerUUID);
                 if (seller != null) {
-                    seller.sendSystemMessage(Component.literal("§a[AH] Item vandut! Profit: " + String.format("%.2f", profit) + " Lei"));
+                    seller.sendSystemMessage(Component.literal("§a[AH] Item sold! Profit: " + EvoCurrencyFormatter.formatWithCurrency(profit)));
                     PacketHandler.sendToPlayer(new PacketHandler.S2C_SyncBalance(EconomyManager.get().getBalance(seller.getUUID())), seller);
                 }
             }

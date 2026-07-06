@@ -1,6 +1,7 @@
 package org.evocraft.evomarkets.ah;
 
 import org.evocraft.evocore.client.ClientBalanceData;
+import org.evocraft.evocore.util.EvoCurrencyFormatter;
 import org.evocraft.evomarkets.network.EvoMarketsPacketHandler;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -66,7 +67,7 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
         searchSellerBox = new EditBox(this.font, 0, 0, 90, 16, Component.empty());
         searchSellerBox.setBordered(false);
         searchSellerBox.setTextColor(TEXT_COLOR);
-        searchSellerBox.setHint(Component.literal("Vânzător...").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        searchSellerBox.setHint(Component.literal("Seller...").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
 
         btnSort = new CustomButton("Sortare: Recent", 0, 0, 100, 20, () -> {
             menu.cycleSort(); updateSortText(); syncFilters();
@@ -78,8 +79,8 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
             updateMyListingsText();
         });
 
-        btnPrev = new CustomButton("◀ Pagina Anterioară", 0, 0, 115, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 2));
-        btnNext = new CustomButton("Pagina Următoare ▶", 0, 0, 115, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1));
+        btnPrev = new CustomButton("< Previous Page", 0, 0, 115, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 2));
+        btnNext = new CustomButton("Next Page >", 0, 0, 115, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1));
         btnClose = new CustomButton("Închide", 0, 0, 70, 20, this::onClose);
 
         btnAction = new CustomButton("§aCUMPĂRĂ", 0, 0, 140, 25, () -> {
@@ -272,7 +273,7 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
                 String seller = tag.getString("AH_Seller");
 
                 // --- TAIEREA PERFECTA LA PIXEL PENTRU CHENARELE MICI ---
-                // Lățimea logică maximă este ~78px pt Nume Item și ~42px pt Vânzător/Preț (că mai adăugăm "Vânzător: " și " Lei")
+                // Pixel trim limits for compact item, seller and price rows.
                 String displayItemName = trimText(stack.getHoverName().getString(), 78);
                 String displaySeller = trimText(seller, 40);
                 String displayPriceNum = trimText(formatPrice(price), 45);
@@ -286,8 +287,8 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
                 g.pose().pushPose();
                 g.pose().translate(cx + 38, cy + 20, 100);
                 g.pose().scale(0.8f, 0.8f, 1.0f);
-                g.drawString(this.font, "Vânzător: §b" + displaySeller, 0, 0, TEXT_COLOR, false);
-                g.drawString(this.font, "Preț: §a" + displayPriceNum + " Lei", 0, 12, TEXT_COLOR, false);
+                g.drawString(this.font, "Seller: §b" + displaySeller, 0, 0, TEXT_COLOR, false);
+                g.drawString(this.font, "Price: §a" + displayPriceNum + " Evo", 0, 12, TEXT_COLOR, false);
                 g.pose().popPose();
             }
         }
@@ -338,9 +339,9 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
                 g.pose().pushPose();
                 g.pose().translate(infoX + 10, infoY + 115, 0);
                 g.pose().scale(0.85f, 0.85f, 1.0f);
-                g.drawString(this.font, "Vânzător: §b" + displaySellerInfo, 0, 0, TEXT_COLOR, false);
-                g.drawString(this.font, "Preț: §a" + displayPriceInfo + " Lei", 0, 13, TEXT_COLOR, false);
-                g.drawString(this.font, "Cantitate: §e" + stack.getCount() + "x", 0, 26, TEXT_COLOR, false); // Adăugat: Rând nou care afișează cantitatea exactă din ofertă
+                g.drawString(this.font, "Seller: §b" + displaySellerInfo, 0, 0, TEXT_COLOR, false);
+                g.drawString(this.font, "Price: §a" + displayPriceInfo + " Evo", 0, 13, TEXT_COLOR, false);
+                g.drawString(this.font, "Quantity: §e" + stack.getCount() + "x", 0, 26, TEXT_COLOR, false);
                 g.pose().popPose();
 
                 int loreBoxY = infoY + 145;
@@ -367,7 +368,7 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
                     g.pose().popPose();
                 }
 
-                btnAction.text = isMine ? "§cANULEAZĂ LICITAȚIA" : "§aCUMPĂRĂ ITEMUL";
+                btnAction.text = isMine ? "§cCANCEL AUCTION" : "§aBUY ITEM";
                 btnAction.x = infoX + 12;
                 btnAction.y = infoY + 258;
                 btnAction.w = infoPanelWidth - 24;
@@ -379,8 +380,8 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
                 g.pose().pushPose();
                 g.pose().translate(infoX + infoPanelWidth / 2f, balY + 6, 0);
                 g.pose().scale(0.9f, 0.9f, 1.0f);
-                g.drawCenteredString(this.font, "Balanța ta", 0, 0, TEXT_COLOR);
-                g.drawCenteredString(this.font, formatPrice(ClientBalanceData.getBalance()) + " Lei", 0, 14, BORDER_COLOR);
+                g.drawCenteredString(this.font, "Your Balance", 0, 0, TEXT_COLOR);
+                g.drawCenteredString(this.font, formatPrice(ClientBalanceData.getBalance()) + " Evo", 0, 14, BORDER_COLOR);
                 g.pose().popPose();
             }
         }
@@ -388,11 +389,7 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
 
     // --- FIX FORMATTER BANI ---
     private String formatPrice(double price) {
-        if (price >= 1_000_000_000) return String.format("%.1fb", price / 1_000_000_000); // Bilioane (B)
-        if (price >= 1_000_000) return String.format("%.1fm", price / 1_000_000);       // Milioane (M)
-        if (price >= 1_000) return String.format("%.1fk", price / 1_000);               // Mii (K)
-        if (price % 1 == 0) return String.format("%.0f", price);
-        return String.format("%.1f", price);
+        return EvoCurrencyFormatter.format(price);
     }
 
     @Override

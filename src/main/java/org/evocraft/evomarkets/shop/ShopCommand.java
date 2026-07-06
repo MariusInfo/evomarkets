@@ -55,7 +55,7 @@ public class ShopCommand {
                         .executes(ctx -> {
                             ShopConfigManager.get().load();
                             ShopConfigManager.get().syncToAll();
-                            ctx.getSource().sendSuccess(() -> Component.literal("§a[Evo Shop] §fShop-ul a fost reîncărcat și sincronizat pentru §eTOȚI §fjucătorii!"), true);
+                            ctx.getSource().sendSuccess(() -> Component.literal("§a[Evo Shop] §fShop reloaded and synchronized for §eALL §fplayers!"), true);
                             return 1;
                         }))
 

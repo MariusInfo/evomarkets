@@ -3,6 +3,7 @@ package org.evocraft.evomarkets.shop;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 import org.evocraft.evocore.client.ClientBalanceData;
+import org.evocraft.evocore.util.EvoCurrencyFormatter;
 import org.evocraft.evomarkets.network.EvoMarketsPacketHandler;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -119,12 +120,12 @@ public class PlaneShopScreen extends Screen {
             // Butoanele pentru paginare
             if (maxPages > 1) {
                 if (currentPage > 0) {
-                    navButtons.add(new CustomButton("◀ Pg. Prec", mainX, mainY + 235, 80, 20, () -> {
+                    navButtons.add(new CustomButton("< Prev", mainX, mainY + 235, 80, 20, () -> {
                         currentPage--; this.init();
                     }));
                 }
                 if (currentPage < maxPages - 1) {
-                    navButtons.add(new CustomButton("Pg. Urm ▶", mainX + 255, mainY + 235, 80, 20, () -> {
+                    navButtons.add(new CustomButton("Next >", mainX + 255, mainY + 235, 80, 20, () -> {
                         currentPage++; this.init();
                     }));
                 }
@@ -132,15 +133,15 @@ public class PlaneShopScreen extends Screen {
             // ==========================================
 
             Tab nextTab = getNextTab(currentTab);
-            navButtons.add(new CustomButton(currentTab == Tab.ATTACHMENTS ? "Spre Checkout ▶" : "Sari Peste ▶", mainX + 110, this.topPos + this.imageHeight - 40, 140, 25, () -> switchTab(nextTab)));
-            if (currentTab != Tab.BODY) navButtons.add(new CustomButton("◀ Înapoi", mainX, this.topPos + this.imageHeight - 40, 100, 25, () -> switchTab(getPrevTab(currentTab))));
+            navButtons.add(new CustomButton(currentTab == Tab.ATTACHMENTS ? "Checkout >" : "Skip >", mainX + 110, this.topPos + this.imageHeight - 40, 140, 25, () -> switchTab(nextTab)));
+            if (currentTab != Tab.BODY) navButtons.add(new CustomButton("< Back", mainX, this.topPos + this.imageHeight - 40, 100, 25, () -> switchTab(getPrevTab(currentTab))));
 
         } else {
-            navButtons.add(new CustomButton("◀ Modifică", mainX, this.topPos + this.imageHeight - 40, 100, 25, () -> switchTab(Tab.ATTACHMENTS)));
+            navButtons.add(new CustomButton("< Edit", mainX, this.topPos + this.imageHeight - 40, 100, 25, () -> switchTab(Tab.ATTACHMENTS)));
             double total = (selBody != null ? selBody.price : 0) + (selEngine != null ? selEngine.price : 0) + (selAttach != null ? selAttach.price : 0);
 
-            navButtons.add(new CustomButton("§a💳 PLĂTEȘTE " + formatPrice(total) + " Lei", mainX + 110, this.topPos + this.imageHeight - 40, 200, 25, () -> {
-                if (total == 0) { this.minecraft.player.sendSystemMessage(Component.literal("§cCoșul este gol!")); return; }
+            navButtons.add(new CustomButton("§aPAY " + formatPrice(total) + " Evo", mainX + 110, this.topPos + this.imageHeight - 40, 200, 25, () -> {
+                if (total == 0) { this.minecraft.player.sendSystemMessage(Component.literal("§cYour cart is empty!")); return; }
                 if (ClientBalanceData.getBalance() >= total) {
                     EvoMarketsPacketHandler.INSTANCE.sendToServer(new EvoMarketsPacketHandler.C2S_BuyPlanePacket(
                             (selBody != null && selBody.uuid != null) ? selBody.uuid : "none",
@@ -149,13 +150,13 @@ public class PlaneShopScreen extends Screen {
                     ));
                     this.onClose();
                 } else {
-                    this.minecraft.player.sendSystemMessage(Component.literal("§cNu ai suficienți bani!"));
+                    this.minecraft.player.sendSystemMessage(Component.literal("§cNot enough Evo!"));
                 }
             }));
         }
 
         if (visualPart != null && currentSlide > 0.1f) {
-            navButtons.add(new CustomButton("§a✚ ADAUGĂ ÎN COȘ", this.leftPos + this.imageWidth + 15, this.topPos + this.imageHeight - 60, 130, 25, () -> {
+            navButtons.add(new CustomButton("§aADD TO CART", this.leftPos + this.imageWidth + 15, this.topPos + this.imageHeight - 60, 130, 25, () -> {
                 if (currentTab == Tab.BODY) selBody = visualPart;
                 if (currentTab == Tab.ENGINE) selEngine = visualPart;
                 if (currentTab == Tab.ATTACHMENTS) selAttach = visualPart;
@@ -196,32 +197,32 @@ public class PlaneShopScreen extends Screen {
         fillRounded(g, this.leftPos + 10, this.topPos + 10, sidebarW, this.imageHeight - 20, CARD_BG);
         outlineRounded(g, this.leftPos + 10, this.topPos + 10, sidebarW, this.imageHeight - 20, CARD_BORDER);
 
-        g.drawString(this.font, "§e🛒 Configurația Ta", this.leftPos + 20, this.topPos + 20, 0xFFFFFF);
+        g.drawString(this.font, "§eYour Build", this.leftPos + 20, this.topPos + 20, 0xFFFFFF);
         g.fill(this.leftPos + 15, this.topPos + 32, this.leftPos + sidebarW + 5, this.topPos + 33, CARD_BORDER);
 
         int textY = this.topPos + 40;
-        g.drawString(this.font, "Caroserie:", this.leftPos + 15, textY, TEXT_COLOR);
+        g.drawString(this.font, "Body:", this.leftPos + 15, textY, TEXT_COLOR);
         if (selBody != null) g.drawString(this.font, "§a" + selBody.name, this.leftPos + 15, textY + 12, 0xFFFFFF);
         textY += 35;
 
-        g.drawString(this.font, "Motor:", this.leftPos + 15, textY, TEXT_COLOR);
+        g.drawString(this.font, "Engine:", this.leftPos + 15, textY, TEXT_COLOR);
         if (selEngine != null) g.drawString(this.font, "§a" + selEngine.name, this.leftPos + 15, textY + 12, 0xFFFFFF);
         textY += 35;
 
-        g.drawString(this.font, "Accesoriu:", this.leftPos + 15, textY, TEXT_COLOR);
+        g.drawString(this.font, "Accessory:", this.leftPos + 15, textY, TEXT_COLOR);
         if (selAttach != null) g.drawString(this.font, "§a" + selAttach.name, this.leftPos + 15, textY + 12, 0xFFFFFF);
 
         double total = (selBody != null ? selBody.price : 0) + (selEngine != null ? selEngine.price : 0) + (selAttach != null ? selAttach.price : 0);
         g.fill(this.leftPos + 15, this.topPos + this.imageHeight - 65, this.leftPos + sidebarW + 5, this.topPos + this.imageHeight - 64, CARD_BORDER);
         g.drawString(this.font, "§fTotal:", this.leftPos + 15, this.topPos + this.imageHeight - 55, 0xFFFFFF);
-        g.drawString(this.font, "§a" + formatPrice(total) + " Lei", this.leftPos + 15, this.topPos + this.imageHeight - 40, 0xFFFFFF);
+        g.drawString(this.font, "§a" + formatPrice(total) + " Evo", this.leftPos + 15, this.topPos + this.imageHeight - 40, 0xFFFFFF);
 
         if (currentTab == Tab.CHECKOUT) {
             int mainX = this.leftPos + 175;
             int mainY = this.topPos + 35;
 
             PlaneShopManager.PlanePart[] selectedParts = {selBody, selEngine, selAttach};
-            String[] labels = {"Caroserie", "Motor", "Accesoriu"};
+            String[] labels = {"Body", "Engine", "Accessory"};
 
             // Centram cele 3 sloturi (2 pe un rand, 1 dedesubt pe centru)
             int[][] positions = {
@@ -253,10 +254,10 @@ public class PlaneShopScreen extends Screen {
                     g.pose().translate(px + boxW / 2f, py + boxH - 25, 0);
                     g.pose().scale(0.85f, 0.85f, 1.0f);
                     g.drawCenteredString(this.font, part.name, 0, 0, TEXT_COLOR);
-                    g.drawCenteredString(this.font, "§a" + formatPrice(part.price) + " Lei", 0, 12, 0xFFFFFF);
+                    g.drawCenteredString(this.font, "§a" + formatPrice(part.price) + " Evo", 0, 12, 0xFFFFFF);
                     g.pose().popPose();
                 } else {
-                    g.drawCenteredString(this.font, "§7[ Neselectat ]", px + boxW / 2, py + boxH / 2 - 5, 0xFFFFFF);
+                    g.drawCenteredString(this.font, "§7[ Not selected ]", px + boxW / 2, py + boxH / 2 - 5, 0xFFFFFF);
                 }
             }
         } else {
@@ -265,7 +266,7 @@ public class PlaneShopScreen extends Screen {
                 fillRounded(g, infoX, this.topPos, 160, this.imageHeight, BG_COLOR);
                 outlineRounded(g, infoX, this.topPos, 160, this.imageHeight, BORDER_COLOR);
 
-                g.drawCenteredString(this.font, "INFO PIESĂ", infoX + 80, this.topPos + 15, BORDER_COLOR);
+                g.drawCenteredString(this.font, "PART INFO", infoX + 80, this.topPos + 15, BORDER_COLOR);
 
                 g.pose().pushPose();
                 g.pose().translate(infoX + 80, this.topPos + 90, 150);
@@ -274,7 +275,7 @@ public class PlaneShopScreen extends Screen {
                 g.pose().popPose();
 
                 g.drawCenteredString(this.font, visualPart.name, infoX + 80, this.topPos + 160, 0xFFFFFF);
-                g.drawCenteredString(this.font, "Preț: §a" + formatPrice(visualPart.price) + " Lei", infoX + 80, this.topPos + 180, TEXT_COLOR);
+                g.drawCenteredString(this.font, "Price: §a" + formatPrice(visualPart.price) + " Evo", infoX + 80, this.topPos + 180, TEXT_COLOR);
             }
 
             for (ItemButton b : buttons) {
@@ -296,10 +297,7 @@ public class PlaneShopScreen extends Screen {
     }
 
     private String formatPrice(double price) {
-        if (price >= 1_000_000) return String.format("%.1fm", price / 1_000_000);
-        if (price >= 1_000) return String.format("%.1fk", price / 1_000);
-        if (price % 1 == 0) return String.format("%.0f", price);
-        return String.format("%.1f", price);
+        return EvoCurrencyFormatter.format(price);
     }
 
     @Override
@@ -331,7 +329,7 @@ public class PlaneShopScreen extends Screen {
             g.renderItem(createItemStack(part), 0, 0);
             g.pose().popPose();
 
-            g.drawCenteredString(font, "§a" + formatPrice(part.price) + " Lei", x + w / 2, y + h - 15, 0xFFFFFF);
+            g.drawCenteredString(font, "§a" + formatPrice(part.price) + " Evo", x + w / 2, y + h - 15, 0xFFFFFF);
         }
         public boolean checkClick(int mx, int my) {
             if (mx >= x && mx <= x + w && my >= y && my <= y + h) { action.run(); return true; } return false;

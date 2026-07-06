@@ -1,6 +1,7 @@
 package org.evocraft.evomarkets.shop;
 
 import org.evocraft.evocore.client.ClientBalanceData;
+import org.evocraft.evocore.util.EvoCurrencyFormatter;
 import org.evocraft.evomarkets.network.EvoMarketsPacketHandler;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -29,6 +30,10 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
     private float currentSlide = 0f;
     private float targetSlide = 0f;
     private final int infoPanelWidth = 160;
+    private boolean backpackPromptVisible = false;
+    private String backpackPromptCategoryId = "";
+    private int backpackPromptItemIndex = -1;
+    private int backpackPromptCount = 0;
 
     private final List<CustomButton> buttons = new ArrayList<>();
     CustomButton btnX1, btnX32, btnX64, btnBuy, btnSell, btnSellAll, btnPrev, btnNext, btnBack, btnClose;
@@ -55,11 +60,11 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
         super.init();
         buttons.clear();
 
-        btnPrev = new CustomButton("◀ Pagina Anterioară", 0, 0, 110, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 101));
-        btnNext = new CustomButton("Pagina Următoare ▶", 0, 0, 110, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 102));
+        btnPrev = new CustomButton("< Previous Page", 0, 0, 110, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 101));
+        btnNext = new CustomButton("Next Page >", 0, 0, 110, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 102));
         btnClose = new CustomButton("Închide", 0, 0, 60, 20, this::onClose);
 
-        btnBack = new CustomButton("◀ Înapoi la Categorii", 0, 0, 130, 20, () -> {
+        btnBack = new CustomButton("< Back to Categories", 0, 0, 130, 20, () -> {
             selectedVisualSlot = -1; targetSlide = 0f;
             this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 99);
         });
@@ -84,6 +89,10 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
     }
 
     private void executeTrade(String type, int amount) {
+        executeTrade(type, amount, false, false);
+    }
+
+    private void executeTrade(String type, int amount, boolean includeBackpackItems, boolean skipBackpackPrompt) {
         if (selectedVisualSlot == -1 || this.menu.isMainMenu()) return;
         String catId = this.menu.getCurrentCategoryId();
         int realIndex = (this.menu.getPage() * 20) + selectedVisualSlot;
@@ -92,7 +101,14 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
         if (s.hasItem() && s.getItem().hasTag() && s.getItem().getTag().contains("Real_List_Index")) {
             realIndex = s.getItem().getTag().getInt("Real_List_Index");
         }
-        EvoMarketsPacketHandler.INSTANCE.sendToServer(new EvoMarketsPacketHandler.C2S_ShopTrade(catId, realIndex, type, amount));
+        EvoMarketsPacketHandler.INSTANCE.sendToServer(new EvoMarketsPacketHandler.C2S_ShopTrade(catId, realIndex, type, amount, includeBackpackItems, skipBackpackPrompt));
+    }
+
+    public void showBackpackSellPrompt(String categoryId, int itemIndex, int backpackCount) {
+        this.backpackPromptVisible = true;
+        this.backpackPromptCategoryId = categoryId;
+        this.backpackPromptItemIndex = itemIndex;
+        this.backpackPromptCount = backpackCount;
     }
 
     private void fillRounded(GuiGraphics g, int x, int y, int w, int h, int color) {
@@ -134,6 +150,10 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
 
         for (CustomButton b : buttons) {
             if (b.visible) b.render(g, smx, smy, this.font);
+        }
+
+        if (backpackPromptVisible) {
+            renderBackpackPrompt(g);
         }
 
         g.pose().popPose();
@@ -219,8 +239,8 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
                     g.pose().pushPose();
                     g.pose().translate(cx + 38, cy + 20, 100);
                     g.pose().scale(0.8f, 0.8f, 1.0f);
-                    g.drawString(this.font, "Cumpără: §a" + formatPrice(buy) + " Lei", 0, 0, TEXT_COLOR, false);
-                    g.drawString(this.font, "Vânzare: §c" + formatPrice(sell) + " Lei", 0, 12, TEXT_COLOR, false);
+                    g.drawString(this.font, "Buy: §a" + formatPrice(buy) + " Evo", 0, 0, TEXT_COLOR, false);
+                    g.drawString(this.font, "Sell: §c" + formatPrice(sell) + " Evo", 0, 12, TEXT_COLOR, false);
                     g.pose().popPose();
                 }
             } else {
@@ -273,8 +293,8 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
                     g.pose().pushPose();
                     g.pose().translate(infoX + 15, infoY + 160, 0);
                     g.pose().scale(0.95f, 0.95f, 1.0f);
-                    g.drawString(this.font, "Preț Cumpărare: §a" + formatPrice(buy) + " Lei", 0, 0, TEXT_COLOR, false);
-                    g.drawString(this.font, "Preț Vânzare: §c" + formatPrice(sell) + " Lei", 0, 15, TEXT_COLOR, false);
+                    g.drawString(this.font, "Buy Price: §a" + formatPrice(buy) + " Evo", 0, 0, TEXT_COLOR, false);
+                    g.drawString(this.font, "Sell Price: §c" + formatPrice(sell) + " Evo", 0, 15, TEXT_COLOR, false);
                     g.pose().popPose();
                 }
 
@@ -292,11 +312,74 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
                 g.pose().pushPose();
                 g.pose().translate(infoX + 80, infoY + 285, 0);
                 g.pose().scale(0.8f, 0.8f, 1.0f);
-                g.drawCenteredString(this.font, "Balanța ta", 0, 0, TEXT_COLOR);
-                g.drawCenteredString(this.font, formatPrice(ClientBalanceData.getBalance()) + " Lei", 0, 12, BORDER_COLOR);
+                g.drawCenteredString(this.font, "Your Balance", 0, 0, TEXT_COLOR);
+                g.drawCenteredString(this.font, formatPrice(ClientBalanceData.getBalance()) + " Evo", 0, 12, BORDER_COLOR);
                 g.pose().popPose();
             }
         }
+    }
+
+    private void renderBackpackPrompt(GuiGraphics g) {
+        int boxW = 330;
+        int boxH = 122;
+        int x = this.leftPos + (this.imageWidth - boxW) / 2;
+        int y = this.topPos + (this.imageHeight - boxH) / 2;
+
+        g.fill(this.leftPos, this.topPos, this.leftPos + this.imageWidth, this.topPos + this.imageHeight, 0x99000000);
+        fillRounded(g, x, y, boxW, boxH, BG_COLOR);
+        outlineRounded(g, x, y, boxW, boxH, BORDER_COLOR);
+
+        g.drawCenteredString(this.font, "Backpack Sell All", x + boxW / 2, y + 12, BORDER_COLOR);
+        g.drawCenteredString(this.font, "Do you want to sell items", x + boxW / 2, y + 34, TEXT_COLOR);
+        g.drawCenteredString(this.font, "from your backpack as well?", x + boxW / 2, y + 47, TEXT_COLOR);
+        g.drawCenteredString(this.font, backpackPromptCount + " matching items found", x + boxW / 2, y + 65, 0xFFAAAAAA);
+
+        renderPromptButton(g, x + 56, y + 88, 92, 22, "Yes", 0xFF58C76B);
+        renderPromptButton(g, x + boxW - 148, y + 88, 92, 22, "No", 0xFFE25F5F);
+    }
+
+    private void renderPromptButton(GuiGraphics g, int x, int y, int w, int h, String label, int color) {
+        fillRounded(g, x, y, w, h, CARD_BG);
+        outlineRounded(g, x, y, w, h, color);
+        g.drawCenteredString(this.font, label, x + w / 2, y + 7, color);
+    }
+
+    private boolean handleBackpackPromptClick(int mouseX, int mouseY) {
+        if (!backpackPromptVisible) return false;
+
+        int boxW = 330;
+        int boxH = 122;
+        int x = this.leftPos + (this.imageWidth - boxW) / 2;
+        int y = this.topPos + (this.imageHeight - boxH) / 2;
+
+        int yesX = x + 56;
+        int yesY = y + 88;
+        int noX = x + boxW - 148;
+        int noY = y + 88;
+
+        if (mouseX >= yesX && mouseX <= yesX + 92 && mouseY >= yesY && mouseY <= yesY + 22) {
+            sendBackpackPromptChoice(true);
+            return true;
+        }
+
+        if (mouseX >= noX && mouseX <= noX + 92 && mouseY >= noY && mouseY <= noY + 22) {
+            sendBackpackPromptChoice(false);
+            return true;
+        }
+
+        return mouseX >= x && mouseX <= x + boxW && mouseY >= y && mouseY <= y + boxH;
+    }
+
+    private void sendBackpackPromptChoice(boolean includeBackpackItems) {
+        backpackPromptVisible = false;
+        EvoMarketsPacketHandler.INSTANCE.sendToServer(new EvoMarketsPacketHandler.C2S_ShopTrade(
+                backpackPromptCategoryId,
+                backpackPromptItemIndex,
+                "SELL",
+                -1,
+                includeBackpackItems,
+                true
+        ));
     }
 
     private int getInventoryCount(ItemStack target) {
@@ -309,10 +392,7 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
     }
 
     private String formatPrice(double price) {
-        if (price >= 1_000_000) return String.format("%.1fm", price / 1_000_000);
-        if (price >= 1_000) return String.format("%.1fk", price / 1_000);
-        if (price % 1 == 0) return String.format("%.0f", price);
-        return String.format("%.1f", price);
+        return EvoCurrencyFormatter.format(price);
     }
 
     @Override
@@ -320,6 +400,10 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
         float scale = getScale();
         int smx = (int) (mouseX / scale);
         int smy = (int) (mouseY / scale);
+
+        if (handleBackpackPromptClick(smx, smy)) {
+            return true;
+        }
 
         for (CustomButton b : buttons) {
             if (b.checkClick(smx, smy)) return true;

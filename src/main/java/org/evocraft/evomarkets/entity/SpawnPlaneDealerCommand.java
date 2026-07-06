@@ -26,10 +26,10 @@ public class SpawnPlaneDealerCommand {
                         // Adaugă entitatea în lume
                         player.serverLevel().addFreshEntity(dealer);
 
-                        player.sendSystemMessage(Component.literal("§a✔ Ai spawnat un Dealer de Avioane cu succes!"));
+                        player.sendSystemMessage(Component.literal("§aPlane dealer spawned successfully!"));
                         return 1;
                     } else {
-                        player.sendSystemMessage(Component.literal("§c✖ Eroare: Nu s-a putut crea entitatea!"));
+                        player.sendSystemMessage(Component.literal("§cError: Could not create the entity!"));
                         return 0;
                     }
                 })

@@ -53,34 +53,34 @@ public class TradeManager {
 
     public void sendRequest(ServerPlayer sender, ServerPlayer target) {
         if (sender.getUUID().equals(target.getUUID())) {
-            sender.sendSystemMessage(Component.literal("§cNu poți face trade cu tine însuți!"));
+            sender.sendSystemMessage(Component.literal("§cYou cannot trade with yourself!"));
             return;
         }
         if (isInTrade(sender) || isInTrade(target)) {
-            sender.sendSystemMessage(Component.literal("§cJucătorul este deja într-un trade!"));
+            sender.sendSystemMessage(Component.literal("§cThat player is already in a trade!"));
             return;
         }
 
         if (!PlayerStatsManager.get().canReceiveTrade(target.getUUID(), sender.getUUID())) {
-            sender.sendSystemMessage(Component.literal("§c[!] Nu îi poți trimite cereri acestui jucător. Are Trade-ul dezactivat sau te-a blocat."));
+            sender.sendSystemMessage(Component.literal("§c[!] You cannot send this player trade requests. Trade is disabled or they blocked you."));
             return;
         }
 
         if (requests.containsKey(target.getUUID())) {
             PendingRequest existingReq = requests.get(target.getUUID());
             if (existingReq.sender != null && existingReq.sender.getUUID().equals(sender.getUUID())) {
-                sender.sendSystemMessage(Component.literal("§c[!] I-ai trimis deja o cerere de trade acestui jucător. Așteaptă să răspundă!"));
+                sender.sendSystemMessage(Component.literal("§c[!] You already sent this player a trade request. Wait for a response!"));
             } else {
-                sender.sendSystemMessage(Component.literal("§c[!] Acest jucător are deja o cerere de trade în așteptare de la altcineva."));
+                sender.sendSystemMessage(Component.literal("§c[!] This player already has a pending trade request from someone else."));
             }
             return;
         }
 
         requests.put(target.getUUID(), new PendingRequest(sender, target));
 
-        sender.sendSystemMessage(Component.literal("§aCerere de trade trimisă către " + target.getScoreboardName() + ". Are 1 minut să accepte."));
-        target.sendSystemMessage(Component.literal("§e[Trade] §fAi primit o cerere de schimb de la §b" + sender.getScoreboardName() + "§f!"));
-        target.sendSystemMessage(Component.literal("§7Ai la dispoziție 1 minut. Scrie §a/trade accept§7 pentru a confirma."));
+        sender.sendSystemMessage(Component.literal("§aTrade request sent to " + target.getScoreboardName() + ". They have 1 minute to accept."));
+        target.sendSystemMessage(Component.literal("§e[Trade] §fYou received a trade request from §b" + sender.getScoreboardName() + "§f!"));
+        target.sendSystemMessage(Component.literal("§7You have 1 minute. Type §a/trade accept§7 to confirm."));
 
         EvoMarketsPacketHandler.sendToPlayer(new EvoMarketsPacketHandler.S2C_TradeNotification("REQUEST", sender.getScoreboardName()), target);
     }
@@ -91,7 +91,7 @@ public class TradeManager {
             requests.remove(target.getUUID());
             startTrade(req.sender, target);
         } else {
-            target.sendSystemMessage(Component.literal("§cCererea a expirat sau jucătorul nu mai este disponibil."));
+            target.sendSystemMessage(Component.literal("§cThe request expired or the player is no longer available."));
         }
     }
 
@@ -148,7 +148,7 @@ public class TradeManager {
                 if (session.accept1 && session.accept2) session.countdown = 5 * 20;
                 else session.countdown = -1;
             }
-            case "CANCEL" -> session.cancelTrade("Trade anulat de " + player.getScoreboardName());
+            case "CANCEL" -> session.cancelTrade("Trade cancelled by " + player.getScoreboardName());
             case "ADD_MONEY" -> {
                 if (EconomyManager.get().getBalance(player.getUUID()) >= amount) {
                     session.resetAccept();
@@ -156,8 +156,8 @@ public class TradeManager {
                     else session.money2 += amount;
                     EconomyManager.get().removeBalance(player.getUUID(), amount);
                 } else {
-                    player.sendSystemMessage(Component.literal("§c[!] Nu ai suficienți bani pentru a adăuga această sumă!"));
-                    player.displayClientMessage(Component.literal("§c[!] Fonduri insuficiente!"), true);
+                    player.sendSystemMessage(Component.literal("§c[!] You do not have enough Evo to add that amount!"));
+                    player.displayClientMessage(Component.literal("§c[!] Insufficient funds!"), true);
                 }
             }
             case "REMOVE_ALL_MONEY" -> {
@@ -200,8 +200,8 @@ public class TradeManager {
                 PendingRequest req = entry.getValue();
                 req.ticksLeft--;
                 if (req.ticksLeft <= 0) {
-                    if (req.sender != null) req.sender.sendSystemMessage(Component.literal("§cCererea de trade către " + req.target.getScoreboardName() + " a expirat."));
-                    if (req.target != null) req.target.sendSystemMessage(Component.literal("§cCererea de trade de la " + req.sender.getScoreboardName() + " a expirat."));
+                    if (req.sender != null) req.sender.sendSystemMessage(Component.literal("§cThe trade request to " + req.target.getScoreboardName() + " expired."));
+                    if (req.target != null) req.target.sendSystemMessage(Component.literal("§cThe trade request from " + req.sender.getScoreboardName() + " expired."));
                     reqIt.remove();
                 }
             }
@@ -212,7 +212,7 @@ public class TradeManager {
     public static void onLogOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer sp) {
             TradeSession s = get().getSession(sp);
-            if (s != null) s.cancelTrade("Jucătorul s-a deconectat!");
+            if (s != null) s.cancelTrade("The player disconnected!");
         }
     }
 

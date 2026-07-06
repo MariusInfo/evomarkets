@@ -10,6 +10,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraftforge.registries.ForgeRegistries;
+import org.evocraft.evocore.util.EvoCurrencyFormatter;
 
 import java.util.UUID;
 
@@ -29,10 +30,10 @@ public class PlaneShopAdminCommand {
 
                                                     ItemStack handItem = player.getMainHandItem();
                                                     if (handItem.isEmpty()) {
-                                                        player.sendSystemMessage(Component.literal("§c✖ Ține piesa în mână!")); return 0;
+                                                        player.sendSystemMessage(Component.literal("§cHold the part in your hand!")); return 0;
                                                     }
                                                     if (!PlaneShopManager.shopData.containsKey(category)) {
-                                                        player.sendSystemMessage(Component.literal("§c✖ Categorii permise: BODY, ENGINE, ATTACHMENTS")); return 0;
+                                                        player.sendSystemMessage(Component.literal("§cAllowed categories: BODY, ENGINE, ATTACHMENTS")); return 0;
                                                     }
 
                                                     ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(handItem.getItem());
@@ -40,7 +41,7 @@ public class PlaneShopAdminCommand {
                                                     String uniqueId = UUID.randomUUID().toString();
 
                                                     PlaneShopManager.addPart(category, uniqueId, itemId.toString(), nbtStr, name, price);
-                                                    player.sendSystemMessage(Component.literal("§a✔ Ai adăugat " + name + " (Avioane) în " + category + " - Preț: " + price));
+                                                    player.sendSystemMessage(Component.literal("§aAdded " + name + " (aviation) to " + category + " - Price: " + EvoCurrencyFormatter.formatWithCurrency(price)));
                                                     return 1;
                                                 })))))
                 .then(Commands.literal("remove")
@@ -52,15 +53,15 @@ public class PlaneShopAdminCommand {
                                             String name = StringArgumentType.getString(context, "name");
 
                                             if (!PlaneShopManager.shopData.containsKey(category)) {
-                                                player.sendSystemMessage(Component.literal("§c✖ Categorii permise: BODY, ENGINE, ATTACHMENTS")); return 0;
+                                                player.sendSystemMessage(Component.literal("§cAllowed categories: BODY, ENGINE, ATTACHMENTS")); return 0;
                                             }
 
                                             boolean success = PlaneShopManager.removePart(category, name);
                                             if (success) {
-                                                player.sendSystemMessage(Component.literal("§a✔ Ai șters piesa '" + name + "' din categoria " + category));
+                                                player.sendSystemMessage(Component.literal("§aRemoved part '" + name + "' from category " + category));
                                                 return 1;
                                             } else {
-                                                player.sendSystemMessage(Component.literal("§c✖ Nu s-a găsit nicio piesă cu numele '" + name + "'!"));
+                                                player.sendSystemMessage(Component.literal("§cNo part named '" + name + "' was found!"));
                                                 return 0;
                                             }
                                         })))));

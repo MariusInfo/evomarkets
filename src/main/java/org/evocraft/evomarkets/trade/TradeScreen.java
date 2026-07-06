@@ -8,6 +8,7 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.entity.player.Inventory;
+import org.evocraft.evocore.util.EvoCurrencyFormatter;
 import org.evocraft.evomarkets.network.EvoMarketsPacketHandler;
 import org.jetbrains.annotations.NotNull;
 import org.lwjgl.glfw.GLFW;
@@ -235,8 +236,8 @@ public class TradeScreen extends AbstractContainerScreen<TradeMenu> {
         g.drawCenteredString(this.font, myName, x + 46, y + 15, BORDER_COLOR);
         g.drawCenteredString(this.font, theirName, x + 293, y + 15, 0xFFFF5555);
 
-        g.drawCenteredString(this.font, "Ofertă: " + myMoney + " Lei", x + 46, y + 90, 0xFFD700);
-        g.drawCenteredString(this.font, "Ofertă: " + theirMoney + " Lei", x + 293, y + 90, 0xFFD700);
+        g.drawCenteredString(this.font, "Offer: " + EvoCurrencyFormatter.formatWithCurrency(myMoney), x + 46, y + 90, 0xFFD700);
+        g.drawCenteredString(this.font, "Offer: " + EvoCurrencyFormatter.formatWithCurrency(theirMoney), x + 293, y + 90, 0xFFD700);
 
         if (myAccept) g.drawCenteredString(this.font, "§aEu: ACCEPTAT", x + 170, y + 95, 0xFFFFFF);
         if (theirAccept) g.drawCenteredString(this.font, "§a" + theirName + ": ACCEPTAT", x + 170, y + 108, 0xFFFFFF);

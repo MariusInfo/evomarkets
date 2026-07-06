@@ -9,6 +9,7 @@ import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
+import org.evocraft.evocore.util.EvoCurrencyFormatter;
 import org.evocraft.evomarkets.EvoMarkets;
 import org.evocraft.evomarkets.shop.ShopMenu;
 import org.evocraft.evomarkets.shop.ShopConfigManager;
@@ -37,6 +38,7 @@ public class EvoMarketsPacketHandler {
         // Pachete Shop Normal
         INSTANCE.registerMessage(nextId(), S2C_SyncShop.class, S2C_SyncShop::toBytes, S2C_SyncShop::new, S2C_SyncShop::handle);
         INSTANCE.registerMessage(nextId(), C2S_ShopTrade.class, C2S_ShopTrade::toBytes, C2S_ShopTrade::new, C2S_ShopTrade::handle);
+        INSTANCE.registerMessage(nextId(), S2C_BackpackSellPrompt.class, S2C_BackpackSellPrompt::toBytes, S2C_BackpackSellPrompt::new, S2C_BackpackSellPrompt::handle);
         INSTANCE.registerMessage(nextId(), C2S_EditShop.class, C2S_EditShop::toBytes, C2S_EditShop::new, C2S_EditShop::handle);
 
         // Pachete Auction House
@@ -128,12 +130,12 @@ public class EvoMarketsPacketHandler {
                 if (attach != null) total += attach.price;
 
                 if (total == 0) {
-                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c✖ Coșul este gol!")); return;
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cYour cart is empty!")); return;
                 }
 
                 org.evocraft.evocore.data.PlayerStatsManager.PlayerStats stats = org.evocraft.evocore.data.PlayerStatsManager.get().getStats(player.getUUID());
                 if (stats.balance < total) {
-                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c✖ Nu ai suficienți bani!")); return;
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cNot enough Evo!")); return;
                 }
 
                 stats.balance -= total;
@@ -144,7 +146,7 @@ public class EvoMarketsPacketHandler {
                 if (engine != null) giveItem(player, engine, 1);
                 if (attach != null) giveItem(player, attach, 1);
 
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§a✔ Ai achiziționat piese de avion de " + total + " Lei!"));
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§aPurchased aviation parts for " + EvoCurrencyFormatter.formatWithCurrency(total) + "!"));
             });
             ctx.get().setPacketHandled(true);
         }
@@ -235,12 +237,12 @@ public class EvoMarketsPacketHandler {
                 if (attach != null) total += attach.price;
 
                 if (total == 0) {
-                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c✖ Coșul este gol!")); return;
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cYour cart is empty!")); return;
                 }
 
                 org.evocraft.evocore.data.PlayerStatsManager.PlayerStats stats = org.evocraft.evocore.data.PlayerStatsManager.get().getStats(player.getUUID());
                 if (stats.balance < total) {
-                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§c✖ Nu ai suficienți bani!")); return;
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cNot enough Evo!")); return;
                 }
 
                 stats.balance -= total;
@@ -252,7 +254,7 @@ public class EvoMarketsPacketHandler {
                 if (engine != null) giveItem(player, engine, 1);
                 if (attach != null) giveItem(player, attach, 1);
 
-                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§a✔ Ai achiziționat piese auto de " + total + " Lei!"));
+                player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§aPurchased car parts for " + EvoCurrencyFormatter.formatWithCurrency(total) + "!"));
             });
             ctx.get().setPacketHandled(true);
         }
@@ -298,16 +300,49 @@ public class EvoMarketsPacketHandler {
 
     public static class C2S_ShopTrade {
         public final String c,t; public final int i,a;
-        public C2S_ShopTrade(String c, int i, String t, int a){this.c=c;this.i=i;this.t=t;this.a=a;}
-        public C2S_ShopTrade(FriendlyByteBuf b){this.c=b.readUtf();this.i=b.readInt();this.t=b.readUtf();this.a=b.readInt();}
-        public void toBytes(FriendlyByteBuf b){b.writeUtf(c);b.writeInt(i);b.writeUtf(t);b.writeInt(a);}
+        public final boolean includeBackpackItems, skipBackpackPrompt;
+        public C2S_ShopTrade(String c, int i, String t, int a){this(c, i, t, a, false, false);}
+        public C2S_ShopTrade(String c, int i, String t, int a, boolean includeBackpackItems, boolean skipBackpackPrompt){this.c=c;this.i=i;this.t=t;this.a=a;this.includeBackpackItems=includeBackpackItems;this.skipBackpackPrompt=skipBackpackPrompt;}
+        public C2S_ShopTrade(FriendlyByteBuf b){this.c=b.readUtf();this.i=b.readInt();this.t=b.readUtf();this.a=b.readInt();this.includeBackpackItems=b.readBoolean();this.skipBackpackPrompt=b.readBoolean();}
+        public void toBytes(FriendlyByteBuf b){b.writeUtf(c);b.writeInt(i);b.writeUtf(t);b.writeInt(a);b.writeBoolean(includeBackpackItems);b.writeBoolean(skipBackpackPrompt);}
         public void handle(Supplier<NetworkEvent.Context> ctx){
             ctx.get().enqueueWork(()->{
                 ServerPlayer p=ctx.get().getSender();
                 if(p!=null && p.containerMenu instanceof ShopMenu m) {
-                    m.performTransaction(this.c,i,"BUY".equals(t),"SELL".equals(t),a);
+                    m.performTransaction(this.c,i,"BUY".equals(t),"SELL".equals(t),a,includeBackpackItems,skipBackpackPrompt);
                 }
             });
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static class S2C_BackpackSellPrompt {
+        public final String categoryId;
+        public final int itemIndex;
+        public final int backpackCount;
+
+        public S2C_BackpackSellPrompt(String categoryId, int itemIndex, int backpackCount) {
+            this.categoryId = categoryId;
+            this.itemIndex = itemIndex;
+            this.backpackCount = backpackCount;
+        }
+
+        public S2C_BackpackSellPrompt(FriendlyByteBuf b) {
+            this.categoryId = b.readUtf();
+            this.itemIndex = b.readInt();
+            this.backpackCount = b.readInt();
+        }
+
+        public void toBytes(FriendlyByteBuf b) {
+            b.writeUtf(categoryId);
+            b.writeInt(itemIndex);
+            b.writeInt(backpackCount);
+        }
+
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
+                ClientEvoMarketsHandler.showBackpackSellPrompt(categoryId, itemIndex, backpackCount);
+            }));
             ctx.get().setPacketHandled(true);
         }
     }
