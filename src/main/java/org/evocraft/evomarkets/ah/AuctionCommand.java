@@ -59,8 +59,7 @@ public class AuctionCommand {
                                 for (AuctionHistoryManager.Transaction t : list) {
                                     String line = "§7[" + t.date + "] §b" + t.itemName
                                             + " §7bought by §e" + t.buyerName
-                                            + " §7for §a" + EvoCurrencyFormatter.formatWithCurrency(t.price)
-                                            + " §7(Tax: §c" + EvoCurrencyFormatter.formatWithCurrency(t.tax) + "§7)";
+                                            + " §7for §a" + EvoCurrencyFormatter.formatWithCurrency(t.price);
                                     ctx.getSource().sendSystemMessage(Component.literal(line));
                                 }
                             } catch (Exception e) { e.printStackTrace(); }
@@ -82,7 +81,7 @@ public class AuctionCommand {
 
                                         ctx.getSource().sendSuccess(() -> Component.literal("§a[AH] Station set on the selected block!"), true);
                                     } else {
-                                        ctx.getSource().sendFailure(Component.literal("§cTrebuie să te uiți la un bloc!"));
+                                        ctx.getSource().sendFailure(Component.literal("§cYou must look at a block!"));
                                     }
                                     return 1;
                                 })
@@ -96,9 +95,9 @@ public class AuctionCommand {
 
                                         AuctionStationManager.get().removeStation(p.serverLevel(), pos);
 
-                                        ctx.getSource().sendSuccess(() -> Component.literal("§c[AH] Stație ștearsă!"), true);
+                                        ctx.getSource().sendSuccess(() -> Component.literal("§c[AH] Station removed!"), true);
                                     } else {
-                                        ctx.getSource().sendFailure(Component.literal("§cTrebuie să te uiți la un bloc!"));
+                                        ctx.getSource().sendFailure(Component.literal("§cYou must look at a block!"));
                                     }
                                     return 1;
                                 })

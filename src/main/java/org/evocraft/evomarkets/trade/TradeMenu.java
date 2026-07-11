@@ -65,7 +65,7 @@ public class TradeMenu extends AbstractContainerMenu {
         if (!player.level().isClientSide && player instanceof ServerPlayer sp) {
             TradeManager.TradeSession session = TradeManager.get().getSession(sp);
             if (session != null && !session.isFinished) {
-                session.cancelTrade("Jucatorul a inchis meniul.");
+                session.cancelTrade("The player closed the menu.");
             }
         }
     }

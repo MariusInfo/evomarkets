@@ -93,7 +93,7 @@ public class AuctionMarketManager {
         try (Writer writer = new FileWriter(saveFile)) {
             gson.toJson(listings, writer);
         } catch (IOException e) {
-            LOGGER.error("Eroare la salvarea licitatiilor: ", e);
+            LOGGER.error("Error saving auctions: ", e);
         }
     }
 
@@ -108,7 +108,7 @@ public class AuctionMarketManager {
                 }
             }
         } catch (IOException e) {
-            LOGGER.error("Eroare la incarcarea licitatiilor: ", e);
+            LOGGER.error("Error loading auctions: ", e);
         }
     }
 

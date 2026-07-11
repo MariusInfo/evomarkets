@@ -21,7 +21,7 @@ public class PlaneDealerEntity extends PathfinderMob {
         super(type, level);
         this.setNoAi(true);
         this.setInvulnerable(true);
-        this.setCustomName(Component.literal("§b§lDealer Avioane"));
+        this.setCustomName(Component.literal("§b§lPlane Dealer"));
         this.setCustomNameVisible(true);
         this.setPersistenceRequired();
     }
@@ -34,6 +34,7 @@ public class PlaneDealerEntity extends PathfinderMob {
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
         if (!this.level().isClientSide() && hand == InteractionHand.MAIN_HAND) {
+            ensureEnglishName();
             String jsonData = PlaneShopManager.GSON.toJson(PlaneShopManager.shopData);
             EvoMarketsPacketHandler.INSTANCE.send(
                     PacketDistributor.PLAYER.with(() -> (ServerPlayer) player),
@@ -42,6 +43,22 @@ public class PlaneDealerEntity extends PathfinderMob {
             return InteractionResult.SUCCESS;
         }
         return super.mobInteract(player, hand);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (!this.level().isClientSide() && this.tickCount % 40 == 0) {
+            ensureEnglishName();
+        }
+    }
+
+    private void ensureEnglishName() {
+        String current = this.getDisplayName().getString();
+        if (!current.contains("Plane Dealer")) {
+            this.setCustomName(Component.literal("§b§lPlane Dealer"));
+            this.setCustomNameVisible(true);
+        }
     }
 
     @Override

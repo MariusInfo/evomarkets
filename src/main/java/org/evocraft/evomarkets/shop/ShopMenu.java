@@ -256,7 +256,7 @@ public class ShopMenu extends AbstractContainerMenu {
                     removed += BackpackSellCompat.removeSellableItems(player, baseStack, remaining);
                 }
                 if (removed <= 0) {
-                    player.sendSystemMessage(Component.literal("Â§cYou do not have " + itemName + " in your inventory!"));
+                    player.sendSystemMessage(Component.literal("§cYou do not have " + itemName + " in your inventory!"));
                     return;
                 }
                 double profit = sItem.sellPrice * removed;

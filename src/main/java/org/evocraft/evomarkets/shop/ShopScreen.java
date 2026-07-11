@@ -62,7 +62,7 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
 
         btnPrev = new CustomButton("< Previous Page", 0, 0, 110, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 101));
         btnNext = new CustomButton("Next Page >", 0, 0, 110, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 102));
-        btnClose = new CustomButton("Închide", 0, 0, 60, 20, this::onClose);
+        btnClose = new CustomButton("Close", 0, 0, 60, 20, this::onClose);
 
         btnBack = new CustomButton("< Back to Categories", 0, 0, 130, 20, () -> {
             selectedVisualSlot = -1; targetSlide = 0f;
@@ -73,9 +73,9 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
         btnX32 = new CustomButton("x32", 0, 0, 40, 20, () -> setQty(32));
         btnX64 = new CustomButton("x64", 0, 0, 40, 20, () -> setQty(64));
 
-        btnBuy = new CustomButton("§aCUMPĂRĂ", 0, 0, 130, 25, () -> executeTrade("BUY", currentQuantity));
-        btnSell = new CustomButton("§cVINDE", 0, 0, 62, 25, () -> executeTrade("SELL", currentQuantity));
-        btnSellAll = new CustomButton("§cVINDE (TOT)", 0, 0, 63, 25, () -> executeTrade("SELL", -1));
+        btnBuy = new CustomButton("§aBUY", 0, 0, 130, 25, () -> executeTrade("BUY", currentQuantity));
+        btnSell = new CustomButton("§cSELL", 0, 0, 62, 25, () -> executeTrade("SELL", currentQuantity));
+        btnSellAll = new CustomButton("§cSELL ALL", 0, 0, 63, 25, () -> executeTrade("SELL", -1));
 
         buttons.addAll(List.of(btnPrev, btnNext, btnClose, btnBack, btnX1, btnX32, btnX64, btnBuy, btnSell, btnSellAll));
         setQty(1);
@@ -283,7 +283,7 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
                 g.pose().pushPose();
                 g.pose().translate(infoX + 80, infoY + 135, 0);
                 g.pose().scale(0.85f, 0.85f, 1.0f);
-                g.drawCenteredString(this.font, "În inventar: " + invCount + " unități", 0, 0, 0xFFAAAAAA);
+                g.drawCenteredString(this.font, "In inventory: " + invCount + " units", 0, 0, 0xFFAAAAAA);
                 g.pose().popPose();
 
                 CompoundTag tag = stack.getTag();

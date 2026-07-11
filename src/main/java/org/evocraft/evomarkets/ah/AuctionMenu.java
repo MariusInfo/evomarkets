@@ -137,8 +137,8 @@ public class AuctionMenu extends AbstractContainerMenu {
             EconomyManager.get().removeBalance(player.getUUID(), listing.price);
             PacketHandler.sendToPlayer(new PacketHandler.S2C_SyncBalance(EconomyManager.get().getBalance(player.getUUID())), player);
 
-            double tax = listing.price * 0.15;
-            double profit = listing.price - tax;
+            double tax = 0.0D;
+            double profit = listing.price;
 
             // Daca cumva PlayerStatsManager returneaza null cand seller-ul e offline, nu mai pica tot AH-ul!
             try {
@@ -163,7 +163,7 @@ public class AuctionMenu extends AbstractContainerMenu {
             if (server != null) {
                 ServerPlayer seller = server.getPlayerList().getPlayer(listing.sellerUUID);
                 if (seller != null) {
-                    seller.sendSystemMessage(Component.literal("§a[AH] Item sold! Profit: " + EvoCurrencyFormatter.formatWithCurrency(profit)));
+                    seller.sendSystemMessage(Component.literal("§a[AH] Item sold! Received: " + EvoCurrencyFormatter.formatWithCurrency(profit)));
                     PacketHandler.sendToPlayer(new PacketHandler.S2C_SyncBalance(EconomyManager.get().getBalance(seller.getUUID())), seller);
                 }
             }

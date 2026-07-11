@@ -28,7 +28,7 @@ public class SpawnItemShopCommand {
                     }
 
                     if (exists) {
-                        player.sendSystemMessage(Component.literal("§c✖ Există deja un NPC Shop Iteme pe hartă! Nu poți adăuga altul."));
+                        player.sendSystemMessage(Component.literal("§c✖ An Item Shop NPC already exists on the map! You cannot add another one."));
                         return 0;
                     }
 
@@ -40,7 +40,7 @@ public class SpawnItemShopCommand {
                         npc.setYHeadRot(player.getYRot());
 
                         player.level().addFreshEntity(npc);
-                        player.sendSystemMessage(Component.literal("§a✔ NPC-ul Shop Iteme a fost creat!"));
+                        player.sendSystemMessage(Component.literal("§a✔ Item Shop NPC was created!"));
                     }
                     return 1;
                 }));
@@ -54,7 +54,7 @@ public class SpawnItemShopCommand {
                     List<ItemShopEntity> npcs = player.level().getEntitiesOfClass(ItemShopEntity.class, player.getBoundingBox().inflate(50.0D));
 
                     if (npcs.isEmpty()) {
-                        player.sendSystemMessage(Component.literal("§c✖ Nu s-a găsit niciun NPC Shop Iteme în apropiere (50 blocuri)!"));
+                        player.sendSystemMessage(Component.literal("§c✖ No Item Shop NPC found nearby (50 blocks)!"));
                         return 0;
                     }
 
@@ -64,7 +64,7 @@ public class SpawnItemShopCommand {
                         removed++;
                     }
 
-                    player.sendSystemMessage(Component.literal("§a✔ Au fost șterși " + removed + " NPC-uri Shop Iteme!"));
+                    player.sendSystemMessage(Component.literal("§a✔ Removed " + removed + " Item Shop NPC(s)!"));
                     return removed;
                 }));
     }

@@ -12,7 +12,7 @@ public class TradeCommand {
         dispatcher.register(Commands.literal("trade")
                 // Daca scrie doar /trade ii dam mesajul de ajutor
                 .executes(ctx -> {
-                    ctx.getSource().sendSystemMessage(Component.literal("§cFolosire: /trade <jucator> sau /trade accept"));
+                    ctx.getSource().sendSystemMessage(Component.literal("§cUsage: /trade <player> or /trade accept"));
                     return 1;
                 })
                 // /trade accept
@@ -24,10 +24,10 @@ public class TradeCommand {
                         })
                 )
                 // /trade <nume_jucator>
-                .then(Commands.argument("jucator", EntityArgument.player())
+                .then(Commands.argument("player", EntityArgument.player())
                         .executes(ctx -> {
                             ServerPlayer sender = ctx.getSource().getPlayerOrException();
-                            ServerPlayer target = EntityArgument.getPlayer(ctx, "jucator");
+                            ServerPlayer target = EntityArgument.getPlayer(ctx, "player");
                             TradeManager.get().sendRequest(sender, target);
                             return 1;
                         })

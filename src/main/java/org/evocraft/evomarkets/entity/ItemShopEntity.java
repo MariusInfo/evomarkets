@@ -22,7 +22,7 @@ public class ItemShopEntity extends PathfinderMob {
         super(type, level);
         this.setNoAi(true); // Îngheață NPC-ul
         this.setInvulnerable(true); // Nu ia damage
-        this.setCustomName(Component.literal("§e§lShop Iteme")); // Numele deasupra capului
+        this.setCustomName(Component.literal("§e§lItem Shop"));
         this.setCustomNameVisible(true);
         this.setPersistenceRequired(); // Nu dispare de pe hartă când pleci
     }

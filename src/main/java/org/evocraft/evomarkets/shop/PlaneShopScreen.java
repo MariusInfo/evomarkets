@@ -91,7 +91,7 @@ public class PlaneShopScreen extends Screen {
         int mainX = this.leftPos + 165;
         int mainY = this.topPos + 35;
 
-        navButtons.add(new CustomButton("§c✖ Închide", this.leftPos + this.imageWidth - 80, this.topPos + 10, 70, 20, this::onClose));
+        navButtons.add(new CustomButton("§c✖ Close", this.leftPos + this.imageWidth - 80, this.topPos + 10, 70, 20, this::onClose));
 
         if (currentTab != Tab.CHECKOUT) {
             List<PlaneShopManager.PlanePart> currentParts = shopData.getOrDefault(currentTab.name(), new ArrayList<>());

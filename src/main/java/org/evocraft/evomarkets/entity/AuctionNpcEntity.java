@@ -23,7 +23,7 @@ public class AuctionNpcEntity extends PathfinderMob {
         super(type, level);
         this.setNoAi(true);
         this.setInvulnerable(true);
-        this.setCustomName(Component.literal("§6§lLicitații (AH)"));
+        this.setCustomName(Component.literal("§6§lAuctions (AH)"));
         this.setCustomNameVisible(true);
         this.setPersistenceRequired();
     }
@@ -36,6 +36,7 @@ public class AuctionNpcEntity extends PathfinderMob {
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
         if (!this.level().isClientSide() && hand == InteractionHand.MAIN_HAND) {
+            ensureEnglishName();
             if (player instanceof ServerPlayer serverPlayer) {
                 MenuProvider container = new SimpleMenuProvider(
                         (id, inventory, p) -> new AuctionMenu(id, inventory),
@@ -46,6 +47,22 @@ public class AuctionNpcEntity extends PathfinderMob {
             return InteractionResult.SUCCESS;
         }
         return super.mobInteract(player, hand);
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (!this.level().isClientSide() && this.tickCount % 40 == 0) {
+            ensureEnglishName();
+        }
+    }
+
+    private void ensureEnglishName() {
+        String current = this.getDisplayName().getString();
+        if (!current.contains("Auctions")) {
+            this.setCustomName(Component.literal("§6§lAuctions (AH)"));
+            this.setCustomNameVisible(true);
+        }
     }
 
     @Override

@@ -62,7 +62,7 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
         searchItemBox = new EditBox(this.font, 0, 0, 90, 16, Component.empty());
         searchItemBox.setBordered(false);
         searchItemBox.setTextColor(TEXT_COLOR);
-        searchItemBox.setHint(Component.literal("Caută item...").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        searchItemBox.setHint(Component.literal("Search item...").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
 
         searchSellerBox = new EditBox(this.font, 0, 0, 90, 16, Component.empty());
         searchSellerBox.setBordered(false);
@@ -73,7 +73,7 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
             menu.cycleSort(); updateSortText(); syncFilters();
         });
 
-        btnMyListings = new CustomButton("Toate Itemele", 0, 0, 110, 20, () -> {
+        btnMyListings = new CustomButton("All Items", 0, 0, 110, 20, () -> {
             this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 0);
             this.menu.showMyListings = !this.menu.showMyListings;
             updateMyListingsText();
@@ -81,9 +81,9 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
 
         btnPrev = new CustomButton("< Previous Page", 0, 0, 115, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 2));
         btnNext = new CustomButton("Next Page >", 0, 0, 115, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1));
-        btnClose = new CustomButton("Închide", 0, 0, 70, 20, this::onClose);
+        btnClose = new CustomButton("Close", 0, 0, 70, 20, this::onClose);
 
-        btnAction = new CustomButton("§aCUMPĂRĂ", 0, 0, 140, 25, () -> {
+        btnAction = new CustomButton("§aBUY", 0, 0, 140, 25, () -> {
             if (selectedVisualSlot != -1) {
                 this.minecraft.gameMode.handleInventoryMouseClick(this.menu.containerId, selectedVisualSlot, 0, net.minecraft.world.inventory.ClickType.PICKUP, this.minecraft.player);
                 targetSlide = 0f; selectedVisualSlot = -1;
@@ -101,7 +101,7 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
     }
 
     private void updateMyListingsText() {
-        btnMyListings.text = menu.showMyListings ? "§aDoar Itemele Mele" : "Toate Itemele";
+        btnMyListings.text = menu.showMyListings ? "§aMy Items Only" : "All Items";
     }
 
     private void syncFilters() {
@@ -208,7 +208,7 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
         g.pose().pushPose();
         g.pose().translate(this.leftPos + this.imageWidth / 2.0, this.topPos - 25, 0);
         g.pose().scale(1.5f, 1.5f, 1.5f);
-        g.drawCenteredString(this.font, "PIAȚA EVO CRAFT", 0, 0, BORDER_COLOR);
+        g.drawCenteredString(this.font, "EVO CRAFT MARKET", 0, 0, BORDER_COLOR);
         g.pose().popPose();
 
         int topY = this.topPos + 15;

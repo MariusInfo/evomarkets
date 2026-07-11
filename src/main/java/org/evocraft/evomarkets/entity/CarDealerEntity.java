@@ -21,7 +21,7 @@ public class CarDealerEntity extends PathfinderMob {
         super(type, level);
         this.setNoAi(true); // Îngheață NPC-ul
         this.setInvulnerable(true); // Nu ia damage
-        this.setCustomName(Component.literal("§b§lDealer Auto")); // Numele deasupra capului
+        this.setCustomName(Component.literal("§b§lCar Dealer"));
         this.setCustomNameVisible(true);
         this.setPersistenceRequired(); // ADAUGAT: Marchează entitatea ca persistentă
     }

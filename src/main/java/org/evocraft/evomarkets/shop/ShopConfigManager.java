@@ -64,7 +64,7 @@ public class ShopConfigManager {
                     CompoundTag tag = TagParser.parseTag(this.nbt);
                     newStack.setTag(tag);
                 } catch (Exception e) {
-                    LOGGER.error("Eroare la parsarea NBT-ului pentru itemul: {}", this.itemId, e);
+                LOGGER.error("Error parsing NBT for item: {}", this.itemId, e);
                 }
             }
             return newStack;
@@ -86,7 +86,7 @@ public class ShopConfigManager {
 
     public void load() {
         if (!CONFIG_DIR.exists()) {
-            if (!CONFIG_DIR.mkdirs()) LOGGER.warn("Nu s-a putut crea folderul pentru magazine: {}", CONFIG_DIR.getAbsolutePath());
+            if (!CONFIG_DIR.mkdirs()) LOGGER.warn("Could not create shop folder: {}", CONFIG_DIR.getAbsolutePath());
             generateDefaults();
             return;
         }
@@ -109,7 +109,7 @@ public class ShopConfigManager {
                     data.categories.add(category);
                 }
             } catch (IOException e) {
-                LOGGER.error("Eroare la incarcarea fisierului de categorie: {}", file.getName(), e);
+                LOGGER.error("Error loading category file: {}", file.getName(), e);
             }
         }
     }
@@ -131,7 +131,7 @@ public class ShopConfigManager {
 
     public void save() {
         if (!CONFIG_DIR.exists() && !CONFIG_DIR.mkdirs()) {
-            LOGGER.warn("Nu s-a putut crea folderul de magazine la salvare!");
+            LOGGER.warn("Could not create shop folder while saving!");
         }
 
         for (ShopCategory cat : data.categories) {
@@ -139,7 +139,7 @@ public class ShopConfigManager {
             try (Writer writer = new FileWriter(file)) {
                 GSON.toJson(cat, writer);
             } catch (IOException e) {
-                LOGGER.error("Eroare la salvarea categoriei: {}", cat.id, e);
+                LOGGER.error("Error saving category: {}", cat.id, e);
             }
         }
     }
@@ -168,7 +168,7 @@ public class ShopConfigManager {
         if (data == null || data.categories == null) return false;
         File file = new File(CONFIG_DIR, id + ".json");
 
-        if (file.exists() && !file.delete()) LOGGER.warn("Nu s-a putut sterge fisierul de categorie: {}", file.getName());
+        if (file.exists() && !file.delete()) LOGGER.warn("Could not delete category file: {}", file.getName());
 
         boolean removed = data.categories.removeIf(c -> c.id.equals(id));
         if (removed) {
@@ -257,7 +257,7 @@ public class ShopConfigManager {
                 CompoundTag tag = TagParser.parseTag(item.nbt);
                 stack.setTag(tag);
             } catch (Exception e) {
-                LOGGER.error("Eroare la parsarea NBT pentru itemul: {}", item.itemId, e);
+                LOGGER.error("Error parsing NBT for item: {}", item.itemId, e);
             }
         }
         return stack;

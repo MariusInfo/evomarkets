@@ -28,7 +28,7 @@ public class SpawnDealerCommand {
                     }
 
                     if (exists) {
-                        player.sendSystemMessage(Component.literal("§c✖ Există deja un Dealer Auto pe hartă! Nu poți adăuga altul."));
+                        player.sendSystemMessage(Component.literal("§c✖ A Car Dealer already exists on the map! You cannot add another one."));
                         return 0;
                     }
 
@@ -40,7 +40,7 @@ public class SpawnDealerCommand {
                         npc.setYHeadRot(player.getYRot());
 
                         player.level().addFreshEntity(npc);
-                        player.sendSystemMessage(Component.literal("§a✔ NPC-ul Dealer Auto a fost creat!"));
+                        player.sendSystemMessage(Component.literal("§a✔ Car Dealer NPC was created!"));
                     }
                     return 1;
                 }));
@@ -55,7 +55,7 @@ public class SpawnDealerCommand {
                     List<CarDealerEntity> npcs = player.level().getEntitiesOfClass(CarDealerEntity.class, player.getBoundingBox().inflate(50.0D));
 
                     if (npcs.isEmpty()) {
-                        player.sendSystemMessage(Component.literal("§c✖ Nu s-a găsit niciun Dealer Auto în apropiere (50 blocuri)!"));
+                        player.sendSystemMessage(Component.literal("§c✖ No Car Dealer found nearby (50 blocks)!"));
                         return 0;
                     }
 
@@ -65,7 +65,7 @@ public class SpawnDealerCommand {
                         removed++;
                     }
 
-                    player.sendSystemMessage(Component.literal("§a✔ Au fost șterși " + removed + " Dealeri Auto!"));
+                    player.sendSystemMessage(Component.literal("§a✔ Removed " + removed + " Car Dealer(s)!"));
                     return removed;
                 }));
     }

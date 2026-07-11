@@ -27,9 +27,9 @@ public class ShopCommand {
                                     if (h.getType() == HitResult.Type.BLOCK) {
                                         BlockPos pos = ((BlockHitResult) h).getBlockPos();
                                         ShopStationManager.get().addStation(p.serverLevel(), pos);
-                                        ctx.getSource().sendSuccess(() -> Component.literal("§a[Shop] Stație setată cu succes pe blocul selectat!"), true);
+                                        ctx.getSource().sendSuccess(() -> Component.literal("§a[Shop] Station set successfully on the selected block!"), true);
                                     } else {
-                                        ctx.getSource().sendFailure(Component.literal("§c[!] Trebuie să te uiți la un bloc!"));
+                                        ctx.getSource().sendFailure(Component.literal("§c[!] You must look at a block!"));
                                     }
                                     return 1;
                                 })
@@ -41,9 +41,9 @@ public class ShopCommand {
                                     if (h.getType() == HitResult.Type.BLOCK) {
                                         BlockPos pos = ((BlockHitResult) h).getBlockPos();
                                         ShopStationManager.get().removeStation(p.serverLevel(), pos);
-                                        ctx.getSource().sendSuccess(() -> Component.literal("§c[Shop] Stație ștearsă de pe acest bloc!"), true);
+                                        ctx.getSource().sendSuccess(() -> Component.literal("§c[Shop] Station removed from this block!"), true);
                                     } else {
-                                        ctx.getSource().sendFailure(Component.literal("§c[!] Trebuie să te uiți la blocul setat ca stație!"));
+                                        ctx.getSource().sendFailure(Component.literal("§c[!] You must look at the block set as a station!"));
                                     }
                                     return 1;
                                 })
@@ -69,12 +69,12 @@ public class ShopCommand {
                                             ServerPlayer player = ctx.getSource().getPlayerOrException();
                                             ItemStack hand = player.getMainHandItem();
                                             if(hand.isEmpty()) {
-                                                ctx.getSource().sendFailure(Component.literal("Tine un item in mana pentru iconita!"));
+                                                ctx.getSource().sendFailure(Component.literal("Hold an item in your hand for the icon!"));
                                                 return 0;
                                             }
                                             String icon = ForgeRegistries.ITEMS.getKey(hand.getItem()).toString();
                                             ShopConfigManager.get().addCategory(id, name, icon);
-                                            ctx.getSource().sendSuccess(() -> Component.literal("§aCategorie creata: " + name), true);
+                                            ctx.getSource().sendSuccess(() -> Component.literal("§aCategory created: " + name), true);
                                             return 1;
                                         }))))
 
@@ -90,12 +90,12 @@ public class ShopCommand {
                                                     ServerPlayer player = ctx.getSource().getPlayerOrException();
                                                     ItemStack hand = player.getMainHandItem();
                                                     if (hand.isEmpty()) {
-                                                        ctx.getSource().sendFailure(Component.literal("Tine un item in mana!"));
+                                                        ctx.getSource().sendFailure(Component.literal("Hold an item in your hand!"));
                                                         return 0;
                                                     }
                                                     String itemId = ForgeRegistries.ITEMS.getKey(hand.getItem()).toString();
                                                     ShopConfigManager.get().addItem(cat, itemId, buy, sell);
-                                                    ctx.getSource().sendSuccess(() -> Component.literal("§aItem adaugat in " + cat), true);
+                                                    ctx.getSource().sendSuccess(() -> Component.literal("§aItem added to " + cat), true);
                                                     return 1;
                                                 })))))
 
@@ -109,9 +109,9 @@ public class ShopCommand {
                                             boolean success = ShopConfigManager.get().removeItem(cat, itemId);
 
                                             if (success) {
-                                                ctx.getSource().sendSuccess(() -> Component.literal("§aItem sters din " + cat), true);
+                                                ctx.getSource().sendSuccess(() -> Component.literal("§aItem removed from " + cat), true);
                                             } else {
-                                                ctx.getSource().sendFailure(Component.literal("§cNu am gasit itemul sau categoria!"));
+                                                ctx.getSource().sendFailure(Component.literal("§cCould not find that item or category!"));
                                             }
                                             return 1;
                                         }))))
@@ -124,9 +124,9 @@ public class ShopCommand {
                                     boolean success = ShopConfigManager.get().removeCategory(cat);
 
                                     if (success) {
-                                        ctx.getSource().sendSuccess(() -> Component.literal("§aCategorie stearsa: " + cat), true);
+                                        ctx.getSource().sendSuccess(() -> Component.literal("§aCategory removed: " + cat), true);
                                     } else {
-                                        ctx.getSource().sendFailure(Component.literal("§cNu am gasit categoria!"));
+                                        ctx.getSource().sendFailure(Component.literal("§cCould not find that category!"));
                                     }
                                     return 1;
                                 })))

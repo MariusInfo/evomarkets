@@ -78,21 +78,21 @@ public class TradeScreen extends AbstractContainerScreen<TradeMenu> {
         chatBox.setMaxLength(250);
         chatBox.setBordered(false);
         chatBox.setTextColor(TEXT_COLOR);
-        chatBox.setHint(Component.literal("Scrie în chat...").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        chatBox.setHint(Component.literal("Type in chat...").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
 
         moneyInput = new EditBox(this.font, 0, 0, 45, 16, Component.empty());
         moneyInput.setMaxLength(10);
         moneyInput.setBordered(false);
         moneyInput.setTextColor(TEXT_COLOR);
-        moneyInput.setHint(Component.literal("Suma...").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
+        moneyInput.setHint(Component.literal("Amount...").withStyle(net.minecraft.ChatFormatting.DARK_GRAY));
 
         int controlsY = y + 105;
 
         btnAddMoney = new CustomButton("+", x + 72, controlsY - 3, 20, 20, this::processMoneyInput);
-        btnResetMoney = new CustomButton("Reset Bani", x + 15, controlsY + 18, 77, 18, () -> sendAct("REMOVE_ALL_MONEY", 0, ""));
+        btnResetMoney = new CustomButton("Reset Money", x + 15, controlsY + 18, 77, 18, () -> sendAct("REMOVE_ALL_MONEY", 0, ""));
 
-        btnAccept = new CustomButton("§aACCEPTĂ", x + 130, y + 35, 80, 25, () -> sendAct("TOGGLE_ACCEPT", 0, ""));
-        btnCancel = new CustomButton("§cANULEAZĂ", x + 130, y + 65, 80, 25, () -> sendAct("CANCEL", 0, "Anulat manual."));
+        btnAccept = new CustomButton("§aACCEPT", x + 130, y + 35, 80, 25, () -> sendAct("TOGGLE_ACCEPT", 0, ""));
+        btnCancel = new CustomButton("§cCANCEL", x + 130, y + 65, 80, 25, () -> sendAct("CANCEL", 0, "Cancelled manually."));
 
         buttons.addAll(List.of(btnAddMoney, btnResetMoney, btnAccept, btnCancel));
     }
@@ -203,8 +203,8 @@ public class TradeScreen extends AbstractContainerScreen<TradeMenu> {
             g.drawCenteredString(this.font, "§a" + sec, 0, 0, 0xFFFFFF);
             g.pose().popPose();
 
-            g.drawCenteredString(this.font, "§eTrade Acceptat! Se procesează...", sw / 2, sh / 2 + 40, 0xFFFFFF);
-            g.drawCenteredString(this.font, "§cPentru a anula, apasă ESC!", sw / 2, sh / 2 + 60, 0xFFFFFF);
+            g.drawCenteredString(this.font, "§eTrade accepted! Processing...", sw / 2, sh / 2 + 40, 0xFFFFFF);
+            g.drawCenteredString(this.font, "§cPress ESC to cancel!", sw / 2, sh / 2 + 60, 0xFFFFFF);
 
             g.pose().popPose();
             return;
@@ -220,8 +220,8 @@ public class TradeScreen extends AbstractContainerScreen<TradeMenu> {
         int smy = (int) (mouseY / scale);
 
         if (btnAccept != null) {
-            if (myAccept) { btnAccept.text = "§eȘTERGE ACCEPT"; btnAccept.hoverColor = 0xFF999900; }
-            else { btnAccept.text = "§aACCEPTĂ"; btnAccept.hoverColor = HOVER_COLOR; }
+            if (myAccept) { btnAccept.text = "§eCLEAR ACCEPT"; btnAccept.hoverColor = 0xFF999900; }
+            else { btnAccept.text = "§aACCEPT"; btnAccept.hoverColor = HOVER_COLOR; }
         }
 
         renderCustomBg(g, smx, smy);

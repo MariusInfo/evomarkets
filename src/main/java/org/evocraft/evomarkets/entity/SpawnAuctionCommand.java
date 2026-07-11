@@ -27,7 +27,7 @@ public class SpawnAuctionCommand {
                         // ÎL FACEM SĂ STRĂLUCEASCĂ SĂ-L VEDEM PRIN PEREȚ
 
                         player.serverLevel().addFreshEntity(npc);
-                        player.sendSystemMessage(Component.literal("§a✔ NPC-ul a fost FORȚAT pe hartă!"));
+                        player.sendSystemMessage(Component.literal("§a✔ NPC was force-spawned on the map!"));
                     }
                     return 1;
                 }));
@@ -41,7 +41,7 @@ public class SpawnAuctionCommand {
                     List<AuctionNpcEntity> npcs = player.level().getEntitiesOfClass(AuctionNpcEntity.class, player.getBoundingBox().inflate(200.0D));
 
                     if (npcs.isEmpty()) {
-                        player.sendSystemMessage(Component.literal("§c✖ Niciun NPC găsit în 200 de blocuri."));
+                        player.sendSystemMessage(Component.literal("§c✖ No NPC found within 200 blocks."));
                         return 0;
                     }
 
@@ -51,7 +51,7 @@ public class SpawnAuctionCommand {
                         removed++;
                     }
 
-                    player.sendSystemMessage(Component.literal("§a✔ Au fost șterși " + removed + " NPC-uri!"));
+                    player.sendSystemMessage(Component.literal("§a✔ Removed " + removed + " NPC(s)!"));
                     return removed;
                 }));
     }

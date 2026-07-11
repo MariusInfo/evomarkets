@@ -44,7 +44,7 @@ public class TradeNotificationHandler {
         switch (type) {
             case "REQUEST" -> {
                 title = "CERERE TRADE";
-                sub = "De la: §e" + data + " §f(/trade accept)";
+                sub = "From: §e" + data + " §f(/trade accept)";
                 time = 300;
             }
             case "CANCELLED" -> {
