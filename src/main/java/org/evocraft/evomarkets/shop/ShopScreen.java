@@ -153,7 +153,10 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
         }
 
         if (backpackPromptVisible) {
-            renderBackpackPrompt(g);
+            g.pose().pushPose();
+            g.pose().translate(0, 0, 1000);
+            renderBackpackPrompt(g, smx, smy);
+            g.pose().popPose();
         }
 
         g.pose().popPose();
@@ -319,55 +322,61 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
         }
     }
 
-    private void renderBackpackPrompt(GuiGraphics g) {
-        int boxW = 330;
-        int boxH = 122;
-        int x = this.leftPos + (this.imageWidth - boxW) / 2;
+    private void renderBackpackPrompt(GuiGraphics g, int mouseX, int mouseY) {
+        int boxW = 340;
+        int boxH = 150;
+        int totalShopWidth = this.imageWidth + 8 + this.infoPanelWidth;
+        int x = this.leftPos + (totalShopWidth - boxW) / 2;
         int y = this.topPos + (this.imageHeight - boxH) / 2;
 
-        g.fill(this.leftPos, this.topPos, this.leftPos + this.imageWidth, this.topPos + this.imageHeight, 0x99000000);
-        fillRounded(g, x, y, boxW, boxH, BG_COLOR);
+        int virtualWidth = (int) (this.width / getScale());
+        int virtualHeight = (int) (this.height / getScale());
+        g.fill(0, 0, virtualWidth, virtualHeight, 0xD9000000);
+        fillRounded(g, x, y, boxW, boxH, 0xFF0D140D);
         outlineRounded(g, x, y, boxW, boxH, BORDER_COLOR);
 
-        g.drawCenteredString(this.font, "Backpack Sell All", x + boxW / 2, y + 12, BORDER_COLOR);
-        g.drawCenteredString(this.font, "Do you want to sell items", x + boxW / 2, y + 34, TEXT_COLOR);
-        g.drawCenteredString(this.font, "from your backpack as well?", x + boxW / 2, y + 47, TEXT_COLOR);
-        g.drawCenteredString(this.font, backpackPromptCount + " matching items found", x + boxW / 2, y + 65, 0xFFAAAAAA);
+        g.drawCenteredString(this.font, "BACKPACK SELL ALL", x + boxW / 2, y + 16, BORDER_COLOR);
+        g.fill(x + 16, y + 35, x + boxW - 16, y + 36, CARD_BORDER);
+        g.drawCenteredString(this.font, "Do you want to sell matching items", x + boxW / 2, y + 50, TEXT_COLOR);
+        g.drawCenteredString(this.font, "from your backpack as well?", x + boxW / 2, y + 64, TEXT_COLOR);
+        g.drawCenteredString(this.font, backpackPromptCount + " matching items found", x + boxW / 2, y + 84, 0xFFAAAAAA);
 
-        renderPromptButton(g, x + 56, y + 88, 92, 22, "Yes", 0xFF58C76B);
-        renderPromptButton(g, x + boxW - 148, y + 88, 92, 22, "No", 0xFFE25F5F);
+        renderPromptButton(g, x + 48, y + 112, 110, 24, "YES", 0xFF58C76B, mouseX, mouseY);
+        renderPromptButton(g, x + boxW - 158, y + 112, 110, 24, "NO", 0xFFE25F5F, mouseX, mouseY);
     }
 
-    private void renderPromptButton(GuiGraphics g, int x, int y, int w, int h, String label, int color) {
-        fillRounded(g, x, y, w, h, CARD_BG);
+    private void renderPromptButton(GuiGraphics g, int x, int y, int w, int h, String label, int color, int mouseX, int mouseY) {
+        boolean hovered = mouseX >= x && mouseX <= x + w && mouseY >= y && mouseY <= y + h;
+        fillRounded(g, x, y, w, h, hovered ? 0xFF1D2C1D : 0xFF141C14);
         outlineRounded(g, x, y, w, h, color);
-        g.drawCenteredString(this.font, label, x + w / 2, y + 7, color);
+        g.drawCenteredString(this.font, label, x + w / 2, y + 8, hovered ? 0xFFFFFFFF : color);
     }
 
     private boolean handleBackpackPromptClick(int mouseX, int mouseY) {
         if (!backpackPromptVisible) return false;
 
-        int boxW = 330;
-        int boxH = 122;
-        int x = this.leftPos + (this.imageWidth - boxW) / 2;
+        int boxW = 340;
+        int boxH = 150;
+        int totalShopWidth = this.imageWidth + 8 + this.infoPanelWidth;
+        int x = this.leftPos + (totalShopWidth - boxW) / 2;
         int y = this.topPos + (this.imageHeight - boxH) / 2;
 
-        int yesX = x + 56;
-        int yesY = y + 88;
-        int noX = x + boxW - 148;
-        int noY = y + 88;
+        int yesX = x + 48;
+        int yesY = y + 112;
+        int noX = x + boxW - 158;
+        int noY = y + 112;
 
-        if (mouseX >= yesX && mouseX <= yesX + 92 && mouseY >= yesY && mouseY <= yesY + 22) {
+        if (mouseX >= yesX && mouseX <= yesX + 110 && mouseY >= yesY && mouseY <= yesY + 24) {
             sendBackpackPromptChoice(true);
             return true;
         }
 
-        if (mouseX >= noX && mouseX <= noX + 92 && mouseY >= noY && mouseY <= noY + 22) {
+        if (mouseX >= noX && mouseX <= noX + 110 && mouseY >= noY && mouseY <= noY + 24) {
             sendBackpackPromptChoice(false);
             return true;
         }
 
-        return mouseX >= x && mouseX <= x + boxW && mouseY >= y && mouseY <= y + boxH;
+        return false;
     }
 
     private void sendBackpackPromptChoice(boolean includeBackpackItems) {
@@ -401,7 +410,8 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
         int smx = (int) (mouseX / scale);
         int smy = (int) (mouseY / scale);
 
-        if (handleBackpackPromptClick(smx, smy)) {
+        if (backpackPromptVisible) {
+            handleBackpackPromptClick(smx, smy);
             return true;
         }
 
@@ -439,6 +449,15 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
         }
 
         return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (backpackPromptVisible) {
+            if (keyCode == 256) sendBackpackPromptChoice(false);
+            return true;
+        }
+        return super.keyPressed(keyCode, scanCode, modifiers);
     }
 
     class CustomButton {
