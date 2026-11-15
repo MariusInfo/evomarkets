@@ -60,13 +60,23 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
         super.init();
         buttons.clear();
 
-        btnPrev = new CustomButton("< Previous Page", 0, 0, 110, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 101));
-        btnNext = new CustomButton("Next Page >", 0, 0, 110, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 102));
+        btnPrev = new CustomButton("< Previous Page", 0, 0, 110, 20, () -> {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 101);
+            }
+        });
+        btnNext = new CustomButton("Next Page >", 0, 0, 110, 20, () -> {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 102);
+            }
+        });
         btnClose = new CustomButton("Close", 0, 0, 60, 20, this::onClose);
 
         btnBack = new CustomButton("< Back to Categories", 0, 0, 130, 20, () -> {
             selectedVisualSlot = -1; targetSlide = 0f;
-            this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 99);
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 99);
+            }
         });
 
         btnX1 = new CustomButton("x1", 0, 0, 40, 20, () -> setQty(1));
@@ -93,12 +103,13 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
     }
 
     private void executeTrade(String type, int amount, boolean includeBackpackItems, boolean skipBackpackPrompt) {
-        if (selectedVisualSlot == -1 || this.menu.isMainMenu()) return;
+        if (selectedVisualSlot < 0 || selectedVisualSlot >= 20 || this.menu.isMainMenu()) return;
         String catId = this.menu.getCurrentCategoryId();
         int realIndex = (this.menu.getPage() * 20) + selectedVisualSlot;
 
         Slot s = this.menu.getSlot(selectedVisualSlot);
-        if (s.hasItem() && s.getItem().hasTag() && s.getItem().getTag().contains("Real_List_Index")) {
+        if (!s.hasItem()) return;
+        if (s.getItem().hasTag() && s.getItem().getTag() != null && s.getItem().getTag().contains("Real_List_Index")) {
             realIndex = s.getItem().getTag().getInt("Real_List_Index");
         }
         EvoMarketsPacketHandler.INSTANCE.sendToServer(new EvoMarketsPacketHandler.C2S_ShopTrade(catId, realIndex, type, amount, includeBackpackItems, skipBackpackPrompt));
@@ -125,7 +136,10 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
 
     @Override
     public void render(@NotNull GuiGraphics g, int mouseX, int mouseY, float delta) {
-        if (this.menu.isMainMenu()) { targetSlide = 0f; selectedVisualSlot = -1; }
+        if (this.menu.isMainMenu() || selectedVisualSlot < 0 || selectedVisualSlot >= 20 || !this.menu.getSlot(selectedVisualSlot).hasItem()) {
+            targetSlide = 0f;
+            selectedVisualSlot = -1;
+        }
 
         currentSlide += (targetSlide - currentSlide) * 0.2f;
         if (Math.abs(currentSlide - targetSlide) < 0.005f) currentSlide = targetSlide;
@@ -392,10 +406,21 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
     }
 
     private int getInventoryCount(ItemStack target) {
-        if (this.minecraft == null || this.minecraft.player == null) return 0;
+        if (this.minecraft == null || this.minecraft.player == null || target == null || target.isEmpty()) return 0;
+        ItemStack cleanTarget = target.copy();
+        CompoundTag tag = cleanTarget.getTag();
+        if (tag != null) {
+            tag.remove("Shop_IsItem");
+            tag.remove("Buy_Price");
+            tag.remove("Sell_Price");
+            tag.remove("Real_List_Index");
+            tag.remove("Shop_CatID");
+            tag.remove("Shop_CatName");
+            if (tag.isEmpty()) cleanTarget.setTag(null);
+        }
         int count = 0;
         for (ItemStack stack : this.minecraft.player.getInventory().items) {
-            if (!stack.isEmpty() && stack.getItem() == target.getItem()) count += stack.getCount();
+            if (BackpackSellCompat.isSellTarget(stack, cleanTarget)) count += stack.getCount();
         }
         return count;
     }
@@ -433,7 +458,9 @@ public class ShopScreen extends AbstractContainerScreen<ShopMenu> {
 
             if (smx >= cx && smx <= cx + cardW && smy >= cy && smy <= cy + cardH) {
                 if (this.menu.isMainMenu()) {
-                    this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, i);
+                    if (this.minecraft != null && this.minecraft.gameMode != null) {
+                        this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, i);
+                    }
                 } else {
                     if (selectedVisualSlot == i) {
                         targetSlide = 0f;

@@ -93,7 +93,6 @@ public class ShopMenu extends AbstractContainerMenu {
         List<ShopConfigManager.ShopCategory> allCats = ShopConfigManager.get().data.categories;
         if (allCats == null) return;
 
-        allCats.sort(Comparator.comparingInt(c -> ShopConfigManager.get().data.categories.indexOf(c)));
         updatePagination(allCats.size());
 
         int currentPage = pageSlot.get();
@@ -102,26 +101,30 @@ public class ShopMenu extends AbstractContainerMenu {
 
         for (int i = start; i < end; i++) {
             ShopConfigManager.ShopCategory cat = allCats.get(i);
+            if (cat == null) continue;
             String iconId = (cat.iconItem != null && !cat.iconItem.isEmpty()) ? cat.iconItem : "minecraft:barrier";
-            Item item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(iconId));
-            if (item == null) item = Items.BARRIER;
+            ResourceLocation iconLoc = ResourceLocation.tryParse(iconId);
+            Item item = iconLoc != null ? ForgeRegistries.ITEMS.getValue(iconLoc) : null;
+            if (item == null || item == Items.AIR) item = Items.BARRIER;
 
+            String catName = (cat.name != null && !cat.name.isEmpty()) ? cat.name : (cat.id != null ? cat.id : "Shop");
             ItemStack stack = new ItemStack(item);
-            stack.setHoverName(Component.literal(cat.name));
+            stack.setHoverName(Component.literal(catName));
             CompoundTag tag = stack.getOrCreateTag();
-            tag.putString("Shop_CatID", cat.id);
+            tag.putString("Shop_CatID", cat.id != null ? cat.id : "");
             tag.putBoolean("Shop_IsCategoryMenu", true);
             container.setItem(i - start, stack);
         }
     }
 
     public void loadCategory(ShopConfigManager.ShopCategory cat) {
+        if (cat == null) { loadMainMenu(); return; }
         if (currentCategory != cat) { pageSlot.set(0); currentCategory = cat; }
         int catIdx = ShopConfigManager.get().data.categories.indexOf(cat);
         categoryIndexSlot.set(catIdx);
         container.clearContent();
 
-        List<ShopConfigManager.ShopItem> allItems = cat.items;
+        List<ShopConfigManager.ShopItem> allItems = cat.items != null ? cat.items : List.of();
         updatePagination(allItems.size());
 
         int currentPage = pageSlot.get();
@@ -130,7 +133,7 @@ public class ShopMenu extends AbstractContainerMenu {
 
         for (int i = start; i < end; i++) {
             ShopConfigManager.ShopItem sItem = allItems.get(i);
-            if (sItem.itemId == null) continue;
+            if (sItem == null || sItem.itemId == null) continue;
 
             ItemStack stack = sItem.getSafeStack();
             if (stack.isEmpty()) stack = new ItemStack(Items.BARRIER);
@@ -142,8 +145,8 @@ public class ShopMenu extends AbstractContainerMenu {
             tag.putInt("Real_List_Index", i);
 
             // Fix antiglont: Punem datele categoriei direct in item
-            tag.putString("Shop_CatID", cat.id);
-            tag.putString("Shop_CatName", cat.name);
+            tag.putString("Shop_CatID", cat.id != null ? cat.id : "");
+            tag.putString("Shop_CatName", cat.name != null ? cat.name : "SHOP");
 
             container.setItem(i - start, stack);
         }
@@ -158,12 +161,13 @@ public class ShopMenu extends AbstractContainerMenu {
 
     @Override
     public boolean clickMenuButton(@NotNull Player player, int id) {
+        if (player.level().isClientSide) return true;
         int currentMax = maxPagesSlot.get();
         int currentPage = pageSlot.get();
 
         if (isMainMenu() && id >= 0 && id < ITEMS_PER_PAGE) {
             ItemStack clicked = container.getItem(id);
-            if (clicked.hasTag() && clicked.getTag().contains("Shop_CatID")) {
+            if (clicked.hasTag() && clicked.getTag() != null && clicked.getTag().contains("Shop_CatID")) {
                 String catId = clicked.getTag().getString("Shop_CatID");
                 ShopConfigManager.ShopCategory cat = ShopConfigManager.get().getCategory(catId);
                 if (cat != null) loadCategory(cat);
@@ -187,70 +191,75 @@ public class ShopMenu extends AbstractContainerMenu {
     }
 
     public void performTransaction(String catId, int itemIndex, boolean isBuy, boolean isSell, int amount, boolean includeBackpackItems, boolean skipBackpackPrompt) {
+        if (player.level().isClientSide || player.isSpectator()) return;
+        if (isBuy == isSell) return;
+
         ShopConfigManager.ShopCategory cat = ShopConfigManager.get().getCategory(catId);
-        if (cat == null || itemIndex < 0 || itemIndex >= cat.items.size()) return;
+        if (cat == null || cat.items == null || itemIndex < 0 || itemIndex >= cat.items.size()) return;
 
         ShopConfigManager.ShopItem sItem = cat.items.get(itemIndex);
+        if (sItem == null) return;
         ItemStack baseStack = sItem.getSafeStack();
         if (baseStack.isEmpty()) return;
 
         String itemName = baseStack.getHoverName().getString();
-        boolean sellAll = amount == -1 && isSell;
-        int backpackHas = sellAll ? BackpackSellCompat.countSellableItems(player, baseStack) : 0;
-
-        if (sellAll && backpackHas > 0 && !skipBackpackPrompt && player instanceof ServerPlayer serverPlayer) {
-            EvoMarketsPacketHandler.sendToPlayer(new EvoMarketsPacketHandler.S2C_BackpackSellPrompt(catId, itemIndex, backpackHas), serverPlayer);
-            return;
-        }
-
-        if (amount == -1) {
-            if (isBuy) return;
-            if (isSell) {
-                int totalHas = 0;
-                for(ItemStack i : player.getInventory().items) {
-                    if(!i.isEmpty() && i.getItem() == baseStack.getItem()) totalHas += i.getCount();
-                }
-                if (totalHas == 0 && (!includeBackpackItems || backpackHas == 0)) {
-                    player.sendSystemMessage(Component.literal("§cYou do not have " + itemName + " in your inventory!"));
-                    return;
-                }
-                amount = totalHas + (includeBackpackItems ? backpackHas : 0);
-            }
-        }
 
         if (isBuy) {
-            double cost = sItem.buyPrice * amount;
-            if (EconomyManager.get().getBalance(player.getUUID()) < cost) {
-                player.sendSystemMessage(Component.literal("§cInsufficient funds!"));
+            if (!Double.isFinite(sItem.buyPrice) || sItem.buyPrice <= 0.0D) {
+                player.sendSystemMessage(Component.literal("§cThis item cannot be bought!"));
                 return;
             }
+            if (amount <= 0 || amount > 2304) return;
 
-            ItemStack toGiveTest = baseStack.copy();
-            toGiveTest.setCount(amount);
-            if (!canFit(player.getInventory(), toGiveTest)) {
+            double cost = sItem.buyPrice * amount;
+            if (!Double.isFinite(cost) || cost <= 0.0D) return;
+
+            if (!canFitAmount(player.getInventory(), baseStack, amount)) {
                 player.sendSystemMessage(Component.literal("§cInventory full! You do not have enough space."));
                 return;
             }
 
-            EconomyManager.get().removeBalance(player.getUUID(), cost);
-            ItemStack toGive = baseStack.copy();
-            toGive.setCount(amount);
-            player.getInventory().add(toGive);
+            if (!EconomyManager.get().tryWithdraw(player.getUUID(), cost)) {
+                player.sendSystemMessage(Component.literal("§cInsufficient funds!"));
+                return;
+            }
+
+            giveAmount(player, baseStack, amount);
             player.sendSystemMessage(Component.literal("§aYou bought " + amount + "x " + itemName + " for " + EvoCurrencyFormatter.formatWithCurrency(cost)));
             syncMoney();
-        }
-        else if (isSell) {
-            if (sItem.sellPrice <= 0) return;
-            int has = 0;
-            for(ItemStack i : player.getInventory().items) {
-                if(i.getItem() == baseStack.getItem()) has += i.getCount();
+        } else {
+            if (!Double.isFinite(sItem.sellPrice) || sItem.sellPrice <= 0.0D) {
+                player.sendSystemMessage(Component.literal("§cThis item cannot be sold!"));
+                return;
             }
-            int inventoryHas = has;
-            if (includeBackpackItems) has += backpackHas;
+            if (amount != -1 && (amount <= 0 || amount > 100000)) return;
 
-            int toSell = Math.min(has, amount);
+            boolean sellAll = amount == -1;
+            int backpackHas = sellAll ? BackpackSellCompat.countSellableItems(player, baseStack) : 0;
+
+            if (sellAll && backpackHas > 0 && !skipBackpackPrompt && player instanceof ServerPlayer serverPlayer) {
+                EvoMarketsPacketHandler.sendToPlayer(new EvoMarketsPacketHandler.S2C_BackpackSellPrompt(catId, itemIndex, backpackHas), serverPlayer);
+                return;
+            }
+
+            int inventoryHas = 0;
+            for (ItemStack i : player.getInventory().items) {
+                if (BackpackSellCompat.isSellTarget(i, baseStack)) inventoryHas += i.getCount();
+            }
+
+            if (amount == -1) {
+                int totalAvailable = inventoryHas + (includeBackpackItems ? backpackHas : 0);
+                if (totalAvailable <= 0) {
+                    player.sendSystemMessage(Component.literal("§cYou do not have " + itemName + " in your inventory!"));
+                    return;
+                }
+                amount = totalAvailable;
+            }
+
+            int totalHas = inventoryHas + (includeBackpackItems ? backpackHas : 0);
+            int toSell = Math.min(totalHas, amount);
             if (toSell > 0) {
-                int removed = removeItem(player, baseStack.getItem(), Math.min(inventoryHas, toSell));
+                int removed = removeMatchingItems(player, baseStack, Math.min(inventoryHas, toSell));
                 int remaining = toSell - removed;
                 if (remaining > 0 && includeBackpackItems) {
                     removed += BackpackSellCompat.removeSellableItems(player, baseStack, remaining);
@@ -260,6 +269,7 @@ public class ShopMenu extends AbstractContainerMenu {
                     return;
                 }
                 double profit = sItem.sellPrice * removed;
+                if (!Double.isFinite(profit) || profit <= 0.0D) return;
                 EconomyManager.get().addBalance(player.getUUID(), profit);
                 player.sendSystemMessage(Component.literal("§aYou sold " + removed + "x " + itemName + " for " + EvoCurrencyFormatter.formatWithCurrency(profit)));
                 syncMoney();
@@ -269,13 +279,13 @@ public class ShopMenu extends AbstractContainerMenu {
         }
     }
 
-    private boolean canFit(Inventory inv, ItemStack stack) {
-        int leftToAdd = stack.getCount();
-        int maxStack = stack.getMaxStackSize();
+    private boolean canFitAmount(Inventory inv, ItemStack template, int count) {
+        int leftToAdd = count;
+        int maxStack = Math.max(1, template.getMaxStackSize());
         for (int i = 0; i < 36; i++) {
             ItemStack slot = inv.getItem(i);
             if (slot.isEmpty()) leftToAdd -= maxStack;
-            else if (ItemStack.isSameItemSameTags(slot, stack)) {
+            else if (ItemStack.isSameItemSameTags(slot, template)) {
                 int space = maxStack - slot.getCount();
                 if (space > 0) leftToAdd -= space;
             }
@@ -284,10 +294,24 @@ public class ShopMenu extends AbstractContainerMenu {
         return false;
     }
 
-    private int removeItem(Player player, Item item, int count) {
+    private void giveAmount(Player player, ItemStack template, int count) {
+        int maxStack = Math.max(1, template.getMaxStackSize());
+        int remaining = count;
+        while (remaining > 0) {
+            int chunk = Math.min(remaining, maxStack);
+            ItemStack stack = template.copy();
+            stack.setCount(chunk);
+            if (!player.getInventory().add(stack) && !stack.isEmpty()) {
+                player.drop(stack, false);
+            }
+            remaining -= chunk;
+        }
+    }
+
+    private int removeMatchingItems(Player player, ItemStack target, int count) {
         int left = count;
         for (ItemStack is : player.getInventory().items) {
-            if (is.getItem() == item) {
+            if (BackpackSellCompat.isSellTarget(is, target)) {
                 int take = Math.min(is.getCount(), left);
                 is.shrink(take);
                 left -= take;
@@ -298,7 +322,7 @@ public class ShopMenu extends AbstractContainerMenu {
     }
 
     @Override public @NotNull ItemStack quickMoveStack(@NotNull Player p, int i) { return ItemStack.EMPTY; }
-    @Override public boolean stillValid(@NotNull Player p) { return true; }
+    @Override public boolean stillValid(@NotNull Player p) { return !p.isSpectator() && p.isAlive(); }
 
     // --- FIX: CITIM CATEGORIA DIRECT DIN ITEM CA SA FIM 100% SIGURI ---
     public boolean isMainMenu() {

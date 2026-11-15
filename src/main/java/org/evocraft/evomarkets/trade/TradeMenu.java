@@ -71,7 +71,13 @@ public class TradeMenu extends AbstractContainerMenu {
     }
 
     @Override
-    public boolean stillValid(Player player) { return true; }
+    public boolean stillValid(Player player) {
+        if (player instanceof ServerPlayer sp) {
+            TradeManager.TradeSession session = TradeManager.get().getSession(sp);
+            return session != null && !session.isFinished && sp.isAlive() && !sp.hasDisconnected();
+        }
+        return true;
+    }
 
     @Override
     public @NotNull ItemStack quickMoveStack(@NotNull Player player, int index) {

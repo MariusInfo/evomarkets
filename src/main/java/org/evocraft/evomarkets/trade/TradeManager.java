@@ -137,8 +137,9 @@ public class TradeManager {
     }
 
     public void handleAction(ServerPlayer player, String action, double amount, String text) {
+        if (player == null || action == null) return;
         TradeSession session = getSession(player);
-        if (session == null) return;
+        if (session == null || session.isFinished) return;
         boolean isP1 = session.p1.equals(player);
 
         switch (action) {
@@ -148,13 +149,25 @@ public class TradeManager {
                 if (session.accept1 && session.accept2) session.countdown = 5 * 20;
                 else session.countdown = -1;
             }
-            case "CANCEL" -> session.cancelTrade("Trade cancelled by " + player.getScoreboardName());
+            case "CANCEL" -> {
+                session.cancelTrade("Trade cancelled by " + player.getScoreboardName());
+                return;
+            }
             case "ADD_MONEY" -> {
-                if (EconomyManager.get().getBalance(player.getUUID()) >= amount) {
+                if (!Double.isFinite(amount) || amount <= 0.0D) {
+                    player.sendSystemMessage(Component.literal("§c[!] Invalid amount!"));
+                    return;
+                }
+                double currentOffer = isP1 ? session.money1 : session.money2;
+                double nextOffer = currentOffer + amount;
+                if (!Double.isFinite(nextOffer)) {
+                    player.sendSystemMessage(Component.literal("§c[!] Invalid amount!"));
+                    return;
+                }
+                if (EconomyManager.get().tryWithdraw(player.getUUID(), amount)) {
                     session.resetAccept();
-                    if (isP1) session.money1 += amount;
-                    else session.money2 += amount;
-                    EconomyManager.get().removeBalance(player.getUUID(), amount);
+                    if (isP1) session.money1 = nextOffer;
+                    else session.money2 = nextOffer;
                 } else {
                     player.sendSystemMessage(Component.literal("§c[!] You do not have enough Evo to add that amount!"));
                     player.displayClientMessage(Component.literal("§c[!] Insufficient funds!"), true);
@@ -162,16 +175,22 @@ public class TradeManager {
             }
             case "REMOVE_ALL_MONEY" -> {
                 session.resetAccept();
-                if (isP1 && session.money1 > 0) {
-                    EconomyManager.get().addBalance(player.getUUID(), session.money1);
-                    session.money1 = 0;
-                } else if (!isP1 && session.money2 > 0) {
-                    EconomyManager.get().addBalance(player.getUUID(), session.money2);
-                    session.money2 = 0;
+                if (isP1 && session.money1 > 0.0D) {
+                    double refund = session.money1;
+                    session.money1 = 0.0D;
+                    if (Double.isFinite(refund)) EconomyManager.get().addBalance(player.getUUID(), refund);
+                } else if (!isP1 && session.money2 > 0.0D) {
+                    double refund = session.money2;
+                    session.money2 = 0.0D;
+                    if (Double.isFinite(refund)) EconomyManager.get().addBalance(player.getUUID(), refund);
                 }
             }
             case "CHAT" -> {
-                session.chatLog.add("§e" + player.getScoreboardName() + "§f: " + text);
+                if (text == null) return;
+                String clean = text.replace("\n", " ").replace("\r", " ").trim();
+                if (clean.isEmpty()) return;
+                if (clean.length() > 250) clean = clean.substring(0, 250);
+                session.chatLog.add("§e" + player.getScoreboardName() + "§f: " + clean);
                 if (session.chatLog.size() > 25) session.chatLog.remove(0);
             }
         }
@@ -187,6 +206,12 @@ public class TradeManager {
                 TradeSession ts = it.next();
                 if (ts.isFinished) { it.remove(); continue; }
 
+                if (ts.p1.hasDisconnected() || ts.p2.hasDisconnected() || !ts.p1.isAlive() || !ts.p2.isAlive()) {
+                    ts.cancelTrade("A player became unavailable.");
+                    it.remove();
+                    continue;
+                }
+
                 if (ts.countdown > 0) {
                     ts.countdown--;
                     if (ts.countdown % 20 == 0) ts.sync();
@@ -198,10 +223,14 @@ public class TradeManager {
             while (reqIt.hasNext()) {
                 Map.Entry<UUID, PendingRequest> entry = reqIt.next();
                 PendingRequest req = entry.getValue();
+                if (req.sender == null || req.target == null || req.sender.hasDisconnected() || req.target.hasDisconnected()) {
+                    reqIt.remove();
+                    continue;
+                }
                 req.ticksLeft--;
                 if (req.ticksLeft <= 0) {
-                    if (req.sender != null) req.sender.sendSystemMessage(Component.literal("§cThe trade request to " + req.target.getScoreboardName() + " expired."));
-                    if (req.target != null) req.target.sendSystemMessage(Component.literal("§cThe trade request from " + req.sender.getScoreboardName() + " expired."));
+                    req.sender.sendSystemMessage(Component.literal("§cThe trade request to " + req.target.getScoreboardName() + " expired."));
+                    req.target.sendSystemMessage(Component.literal("§cThe trade request from " + req.sender.getScoreboardName() + " expired."));
                     reqIt.remove();
                 }
             }
@@ -211,6 +240,10 @@ public class TradeManager {
     @SubscribeEvent
     public static void onLogOut(PlayerEvent.PlayerLoggedOutEvent event) {
         if (event.getEntity() instanceof ServerPlayer sp) {
+            UUID uuid = sp.getUUID();
+            get().requests.remove(uuid);
+            get().requests.values().removeIf(r -> r.sender != null && r.sender.getUUID().equals(uuid));
+
             TradeSession s = get().getSession(sp);
             if (s != null) s.cancelTrade("The player disconnected!");
         }
@@ -218,7 +251,10 @@ public class TradeManager {
 
     @SubscribeEvent
     public static void onServerStop(ServerStoppingEvent event) {
-        for (TradeSession s : get().activeTrades) s.cancelTrade("Server Oprit");
+        List<TradeSession> snapshot = new ArrayList<>(get().activeTrades);
+        for (TradeSession s : snapshot) s.cancelTrade("Server Stopped");
+        get().activeTrades.clear();
+        get().requests.clear();
     }
 
     public static class TradeSession {
@@ -240,7 +276,8 @@ public class TradeManager {
         }
 
         public void resetAccept() {
-            if (countdown > 0 || accept1 || accept2) {
+            if (isFinished) return;
+            if (countdown >= 0 || accept1 || accept2) {
                 accept1 = false;
                 accept2 = false;
                 countdown = -1;
@@ -258,9 +295,18 @@ public class TradeManager {
         }
 
         public void completeTrade() {
+            if (isFinished) return;
+            if (p1.hasDisconnected() || p2.hasDisconnected() || !p1.isAlive() || !p2.isAlive()) {
+                cancelTrade("Player unavailable.");
+                return;
+            }
             isFinished = true;
-            EconomyManager.get().addBalance(p1.getUUID(), money2);
-            EconomyManager.get().addBalance(p2.getUUID(), money1);
+            double payToP1 = Double.isFinite(money2) && money2 > 0 ? money2 : 0.0D;
+            double payToP2 = Double.isFinite(money1) && money1 > 0 ? money1 : 0.0D;
+            money1 = 0.0D;
+            money2 = 0.0D;
+            if (payToP1 > 0.0D) EconomyManager.get().addBalance(p1.getUUID(), payToP1);
+            if (payToP2 > 0.0D) EconomyManager.get().addBalance(p2.getUUID(), payToP2);
             giveItems(p1, items2);
             giveItems(p2, items1);
             p1.closeContainer();
@@ -272,8 +318,12 @@ public class TradeManager {
         public void cancelTrade(String reason) {
             if (isFinished) return;
             isFinished = true;
-            if (money1 > 0) EconomyManager.get().addBalance(p1.getUUID(), money1);
-            if (money2 > 0) EconomyManager.get().addBalance(p2.getUUID(), money2);
+            double refundP1 = Double.isFinite(money1) && money1 > 0 ? money1 : 0.0D;
+            double refundP2 = Double.isFinite(money2) && money2 > 0 ? money2 : 0.0D;
+            money1 = 0.0D;
+            money2 = 0.0D;
+            if (refundP1 > 0.0D) EconomyManager.get().addBalance(p1.getUUID(), refundP1);
+            if (refundP2 > 0.0D) EconomyManager.get().addBalance(p2.getUUID(), refundP2);
             giveItems(p1, items1);
             giveItems(p2, items2);
             p1.closeContainer();
@@ -286,8 +336,9 @@ public class TradeManager {
             for (int i = 0; i < container.getContainerSize(); i++) {
                 ItemStack stack = container.getItem(i);
                 if (!stack.isEmpty()) {
-                    if (!player.getInventory().add(stack)) player.drop(stack, false);
+                    ItemStack toGive = stack.copy();
                     container.setItem(i, ItemStack.EMPTY);
+                    if (!player.getInventory().add(toGive) && !toGive.isEmpty()) player.drop(toGive, false);
                 }
             }
         }

@@ -9,8 +9,11 @@ import net.minecraftforge.network.NetworkEvent;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
+import org.evocraft.evocore.data.EconomyManager;
 import org.evocraft.evocore.util.EvoCurrencyFormatter;
 import org.evocraft.evomarkets.EvoMarkets;
+import org.evocraft.evomarkets.shop.CarShopManager;
+import org.evocraft.evomarkets.shop.PlaneShopManager;
 import org.evocraft.evomarkets.shop.ShopMenu;
 import org.evocraft.evomarkets.shop.ShopConfigManager;
 
@@ -23,6 +26,8 @@ import java.util.zip.GZIPOutputStream;
 
 public class EvoMarketsPacketHandler {
     private static final String PROTOCOL_VERSION = "1";
+    private static final int MAX_COMPRESSED_BYTES = 524288;
+    private static final int MAX_DECOMPRESSED_BYTES = 4 * 1024 * 1024;
 
     public static final SimpleChannel INSTANCE = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(EvoMarkets.MODID, "market_channel"),
@@ -60,15 +65,42 @@ public class EvoMarketsPacketHandler {
     }
 
     public static <MSG> void sendToPlayer(MSG message, ServerPlayer player) {
-        if(player != null) INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), message);
+        if (player != null) INSTANCE.send(PacketDistributor.PLAYER.with(() -> player), message);
     }
 
     public static <MSG> void sendToAll(MSG message) {
         INSTANCE.send(PacketDistributor.ALL.noArg(), message);
     }
 
-    private static byte[] compress(String str) { try(ByteArrayOutputStream o=new ByteArrayOutputStream();GZIPOutputStream g=new GZIPOutputStream(o)){g.write(str.getBytes(StandardCharsets.UTF_8));g.close();return o.toByteArray();}catch(Exception e){return new byte[0];}}
-    private static String decompress(byte[] c) { try(ByteArrayInputStream i=new ByteArrayInputStream(c);GZIPInputStream g=new GZIPInputStream(i);ByteArrayOutputStream o=new ByteArrayOutputStream()){byte[] b=new byte[1024];int l;while((l=g.read(b))!=-1)o.write(b,0,l);return o.toString(StandardCharsets.UTF_8);}catch(Exception e){return "";}}
+    private static byte[] compress(String str) {
+        if (str == null) return new byte[0];
+        try (ByteArrayOutputStream o = new ByteArrayOutputStream(); GZIPOutputStream g = new GZIPOutputStream(o)) {
+            g.write(str.getBytes(StandardCharsets.UTF_8));
+            g.close();
+            return o.toByteArray();
+        } catch (Exception e) {
+            return new byte[0];
+        }
+    }
+
+    private static String decompress(byte[] c) {
+        if (c == null || c.length == 0) return "";
+        try (ByteArrayInputStream i = new ByteArrayInputStream(c);
+             GZIPInputStream g = new GZIPInputStream(i);
+             ByteArrayOutputStream o = new ByteArrayOutputStream()) {
+            byte[] b = new byte[1024];
+            int total = 0;
+            int l;
+            while ((l = g.read(b)) != -1) {
+                total += l;
+                if (total > MAX_DECOMPRESSED_BYTES) return "";
+                o.write(b, 0, l);
+            }
+            return o.toString(StandardCharsets.UTF_8);
+        } catch (Exception e) {
+            return "";
+        }
+    }
 
     // ========================================================
     // PACHETE PLANE SHOP (AVIATION)
@@ -76,7 +108,7 @@ public class EvoMarketsPacketHandler {
     public static class S2C_OpenPlaneShop {
         public final String jsonData;
 
-        public S2C_OpenPlaneShop(String jsonData) { this.jsonData = jsonData; }
+        public S2C_OpenPlaneShop(String jsonData) { this.jsonData = jsonData != null ? jsonData : "{}"; }
 
         public S2C_OpenPlaneShop(FriendlyByteBuf buf) {
             this.jsonData = buf.readUtf(262144);
@@ -87,6 +119,10 @@ public class EvoMarketsPacketHandler {
         }
 
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isClient()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> {
                 DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
                     ClientEvoMarketsHandler.openPlaneShop(jsonData);
@@ -100,7 +136,9 @@ public class EvoMarketsPacketHandler {
         public final String bUuid, eUuid, aUuid;
 
         public C2S_BuyPlanePacket(String b, String e, String a) {
-            this.bUuid = b; this.eUuid = e; this.aUuid = a;
+            this.bUuid = b != null ? b : "none";
+            this.eUuid = e != null ? e : "none";
+            this.aUuid = a != null ? a : "none";
         }
 
         public C2S_BuyPlanePacket(FriendlyByteBuf buf) {
@@ -116,31 +154,46 @@ public class EvoMarketsPacketHandler {
         }
 
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isServer()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> {
                 ServerPlayer player = ctx.get().getSender();
-                if (player == null) return;
+                if (player == null || player.isSpectator()) return;
+
+                PlaneShopManager.PlanePart body = PlaneShopManager.findPart("BODY", bUuid);
+                PlaneShopManager.PlanePart engine = PlaneShopManager.findPart("ENGINE", eUuid);
+                PlaneShopManager.PlanePart attach = PlaneShopManager.findPart("ATTACHMENTS", aUuid);
+
+                if (body == null && engine == null && attach == null) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cYour cart is empty!"));
+                    return;
+                }
 
                 double total = 0;
-                org.evocraft.evomarkets.shop.PlaneShopManager.PlanePart body = getPart("BODY", bUuid);
-                org.evocraft.evomarkets.shop.PlaneShopManager.PlanePart engine = getPart("ENGINE", eUuid);
-                org.evocraft.evomarkets.shop.PlaneShopManager.PlanePart attach = getPart("ATTACHMENTS", aUuid);
-
-                if (body != null) total += body.price;
-                if (engine != null) total += engine.price;
-                if (attach != null) total += attach.price;
-
-                if (total == 0) {
-                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cYour cart is empty!")); return;
+                if (body != null) {
+                    if (!Double.isFinite(body.price) || body.price < 0) return;
+                    total += body.price;
+                }
+                if (engine != null) {
+                    if (!Double.isFinite(engine.price) || engine.price < 0) return;
+                    total += engine.price;
+                }
+                if (attach != null) {
+                    if (!Double.isFinite(attach.price) || attach.price < 0) return;
+                    total += attach.price;
                 }
 
-                org.evocraft.evocore.data.PlayerStatsManager.PlayerStats stats = org.evocraft.evocore.data.PlayerStatsManager.get().getStats(player.getUUID());
-                if (stats.balance < total) {
-                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cNot enough Evo!")); return;
+                if (!Double.isFinite(total) || total <= 0) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cYour cart is empty!"));
+                    return;
                 }
 
-                stats.balance -= total;
-                org.evocraft.evocore.data.PlayerStatsManager.get().saveToDatabase(player.getUUID());
-                org.evocraft.evocore.data.PlayerStatsManager.get().syncClient(player.getUUID());
+                if (!EconomyManager.get().tryWithdraw(player.getUUID(), total)) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cNot enough Evo!"));
+                    return;
+                }
 
                 if (body != null) giveItem(player, body, 1);
                 if (engine != null) giveItem(player, engine, 1);
@@ -151,16 +204,11 @@ public class EvoMarketsPacketHandler {
             ctx.get().setPacketHandled(true);
         }
 
-        private org.evocraft.evomarkets.shop.PlaneShopManager.PlanePart getPart(String cat, String uuid) {
-            if (uuid.equals("none")) return null;
-            java.util.List<org.evocraft.evomarkets.shop.PlaneShopManager.PlanePart> parts = org.evocraft.evomarkets.shop.PlaneShopManager.shopData.get(cat);
-            if (parts != null) for (org.evocraft.evomarkets.shop.PlaneShopManager.PlanePart p : parts) if (p.uuid.equals(uuid)) return p;
-            return null;
-        }
-
-        private void giveItem(ServerPlayer player, org.evocraft.evomarkets.shop.PlaneShopManager.PlanePart part, int amount) {
-            @SuppressWarnings("deprecation")
-            var item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(new ResourceLocation(part.id));
+        private void giveItem(ServerPlayer player, PlaneShopManager.PlanePart part, int amount) {
+            if (part.id == null) return;
+            ResourceLocation id = ResourceLocation.tryParse(part.id);
+            if (id == null) return;
+            var item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(id);
             if (item != null && item != net.minecraft.world.item.Items.AIR) {
                 net.minecraft.world.item.ItemStack stack = new net.minecraft.world.item.ItemStack(item, amount);
 
@@ -168,7 +216,7 @@ public class EvoMarketsPacketHandler {
                     try { stack.setTag(net.minecraft.nbt.TagParser.parseTag(part.nbt)); } catch (Exception ignored) {}
                 }
 
-                if (!player.getInventory().add(stack)) player.drop(stack, false);
+                if (!player.getInventory().add(stack) && !stack.isEmpty()) player.drop(stack, false);
             }
         }
     }
@@ -179,7 +227,7 @@ public class EvoMarketsPacketHandler {
     public static class S2C_OpenCarShop {
         public final String jsonData;
 
-        public S2C_OpenCarShop(String jsonData) { this.jsonData = jsonData; }
+        public S2C_OpenCarShop(String jsonData) { this.jsonData = jsonData != null ? jsonData : "{}"; }
 
         public S2C_OpenCarShop(FriendlyByteBuf buf) {
             this.jsonData = buf.readUtf(262144);
@@ -190,6 +238,10 @@ public class EvoMarketsPacketHandler {
         }
 
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isClient()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> {
                 DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
                     ClientEvoMarketsHandler.openCarShop(jsonData);
@@ -203,7 +255,10 @@ public class EvoMarketsPacketHandler {
         public final String bUuid, wUuid, eUuid, aUuid;
 
         public C2S_BuyCarPacket(String b, String w, String e, String a) {
-            this.bUuid = b; this.wUuid = w; this.eUuid = e; this.aUuid = a;
+            this.bUuid = b != null ? b : "none";
+            this.wUuid = w != null ? w : "none";
+            this.eUuid = e != null ? e : "none";
+            this.aUuid = a != null ? a : "none";
         }
 
         public C2S_BuyCarPacket(FriendlyByteBuf buf) {
@@ -221,33 +276,51 @@ public class EvoMarketsPacketHandler {
         }
 
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isServer()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> {
                 ServerPlayer player = ctx.get().getSender();
-                if (player == null) return;
+                if (player == null || player.isSpectator()) return;
+
+                CarShopManager.CarPart body = CarShopManager.findPart("BODY", bUuid);
+                CarShopManager.CarPart wheels = CarShopManager.findPart("WHEELS", wUuid);
+                CarShopManager.CarPart engine = CarShopManager.findPart("ENGINE", eUuid);
+                CarShopManager.CarPart attach = CarShopManager.findPart("ATTACHMENTS", aUuid);
+
+                if (body == null && wheels == null && engine == null && attach == null) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cYour cart is empty!"));
+                    return;
+                }
 
                 double total = 0;
-                org.evocraft.evomarkets.shop.CarShopManager.CarPart body = getPart("BODY", bUuid);
-                org.evocraft.evomarkets.shop.CarShopManager.CarPart wheels = getPart("WHEELS", wUuid);
-                org.evocraft.evomarkets.shop.CarShopManager.CarPart engine = getPart("ENGINE", eUuid);
-                org.evocraft.evomarkets.shop.CarShopManager.CarPart attach = getPart("ATTACHMENTS", aUuid);
-
-                if (body != null) total += body.price;
-                if (wheels != null) total += wheels.price;
-                if (engine != null) total += engine.price;
-                if (attach != null) total += attach.price;
-
-                if (total == 0) {
-                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cYour cart is empty!")); return;
+                if (body != null) {
+                    if (!Double.isFinite(body.price) || body.price < 0) return;
+                    total += body.price;
+                }
+                if (wheels != null) {
+                    if (!Double.isFinite(wheels.price) || wheels.price < 0) return;
+                    total += wheels.price;
+                }
+                if (engine != null) {
+                    if (!Double.isFinite(engine.price) || engine.price < 0) return;
+                    total += engine.price;
+                }
+                if (attach != null) {
+                    if (!Double.isFinite(attach.price) || attach.price < 0) return;
+                    total += attach.price;
                 }
 
-                org.evocraft.evocore.data.PlayerStatsManager.PlayerStats stats = org.evocraft.evocore.data.PlayerStatsManager.get().getStats(player.getUUID());
-                if (stats.balance < total) {
-                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cNot enough Evo!")); return;
+                if (!Double.isFinite(total) || total <= 0) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cYour cart is empty!"));
+                    return;
                 }
 
-                stats.balance -= total;
-                org.evocraft.evocore.data.PlayerStatsManager.get().saveToDatabase(player.getUUID());
-                org.evocraft.evocore.data.PlayerStatsManager.get().syncClient(player.getUUID());
+                if (!EconomyManager.get().tryWithdraw(player.getUUID(), total)) {
+                    player.sendSystemMessage(net.minecraft.network.chat.Component.literal("§cNot enough Evo!"));
+                    return;
+                }
 
                 if (body != null) giveItem(player, body, 1);
                 if (wheels != null) giveItem(player, wheels, 4); // 4 Roți!
@@ -259,16 +332,11 @@ public class EvoMarketsPacketHandler {
             ctx.get().setPacketHandled(true);
         }
 
-        private org.evocraft.evomarkets.shop.CarShopManager.CarPart getPart(String cat, String uuid) {
-            if (uuid.equals("none")) return null;
-            java.util.List<org.evocraft.evomarkets.shop.CarShopManager.CarPart> parts = org.evocraft.evomarkets.shop.CarShopManager.shopData.get(cat);
-            if (parts != null) for (org.evocraft.evomarkets.shop.CarShopManager.CarPart p : parts) if (p.uuid.equals(uuid)) return p;
-            return null;
-        }
-
-        private void giveItem(ServerPlayer player, org.evocraft.evomarkets.shop.CarShopManager.CarPart part, int amount) {
-            @SuppressWarnings("deprecation")
-            var item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(new ResourceLocation(part.id));
+        private void giveItem(ServerPlayer player, CarShopManager.CarPart part, int amount) {
+            if (part.id == null) return;
+            ResourceLocation id = ResourceLocation.tryParse(part.id);
+            if (id == null) return;
+            var item = net.minecraftforge.registries.ForgeRegistries.ITEMS.getValue(id);
             if (item != null && item != net.minecraft.world.item.Items.AIR) {
                 net.minecraft.world.item.ItemStack stack = new net.minecraft.world.item.ItemStack(item, amount);
 
@@ -276,7 +344,7 @@ public class EvoMarketsPacketHandler {
                     try { stack.setTag(net.minecraft.nbt.TagParser.parseTag(part.nbt)); } catch (Exception ignored) {}
                 }
 
-                if (!player.getInventory().add(stack)) player.drop(stack, false);
+                if (!player.getInventory().add(stack) && !stack.isEmpty()) player.drop(stack, false);
             }
         }
     }
@@ -286,30 +354,62 @@ public class EvoMarketsPacketHandler {
     // ========================================================
     public static class S2C_SyncShop {
         private final String json;
-        public S2C_SyncShop(String json) { this.json = json; }
-        public S2C_SyncShop(FriendlyByteBuf buffer) { byte[] d = buffer.readByteArray(); this.json = decompress(d); }
+        public S2C_SyncShop(String json) { this.json = json != null ? json : "{}"; }
+        public S2C_SyncShop(FriendlyByteBuf buffer) { byte[] d = buffer.readByteArray(MAX_COMPRESSED_BYTES); this.json = decompress(d); }
         public void toBytes(FriendlyByteBuf buffer) { buffer.writeByteArray(compress(json)); }
         public void handle(Supplier<NetworkEvent.Context> supplier) {
             NetworkEvent.Context context = supplier.get();
+            if (!context.getDirection().getReceptionSide().isClient()) {
+                context.setPacketHandled(true);
+                return;
+            }
             context.enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
-                ShopConfigManager.get().loadFromJson(json);
+                if (json != null && !json.isEmpty()) {
+                    ShopConfigManager.get().loadFromJson(json);
+                }
             }));
             context.setPacketHandled(true);
         }
     }
 
     public static class C2S_ShopTrade {
-        public final String c,t; public final int i,a;
+        public final String c, t;
+        public final int i, a;
         public final boolean includeBackpackItems, skipBackpackPrompt;
-        public C2S_ShopTrade(String c, int i, String t, int a){this(c, i, t, a, false, false);}
-        public C2S_ShopTrade(String c, int i, String t, int a, boolean includeBackpackItems, boolean skipBackpackPrompt){this.c=c;this.i=i;this.t=t;this.a=a;this.includeBackpackItems=includeBackpackItems;this.skipBackpackPrompt=skipBackpackPrompt;}
-        public C2S_ShopTrade(FriendlyByteBuf b){this.c=b.readUtf();this.i=b.readInt();this.t=b.readUtf();this.a=b.readInt();this.includeBackpackItems=b.readBoolean();this.skipBackpackPrompt=b.readBoolean();}
-        public void toBytes(FriendlyByteBuf b){b.writeUtf(c);b.writeInt(i);b.writeUtf(t);b.writeInt(a);b.writeBoolean(includeBackpackItems);b.writeBoolean(skipBackpackPrompt);}
-        public void handle(Supplier<NetworkEvent.Context> ctx){
-            ctx.get().enqueueWork(()->{
-                ServerPlayer p=ctx.get().getSender();
-                if(p!=null && p.containerMenu instanceof ShopMenu m) {
-                    m.performTransaction(this.c,i,"BUY".equals(t),"SELL".equals(t),a,includeBackpackItems,skipBackpackPrompt);
+        public C2S_ShopTrade(String c, int i, String t, int a) { this(c, i, t, a, false, false); }
+        public C2S_ShopTrade(String c, int i, String t, int a, boolean includeBackpackItems, boolean skipBackpackPrompt) {
+            this.c = c != null ? c : "";
+            this.i = i;
+            this.t = t != null ? t : "";
+            this.a = a;
+            this.includeBackpackItems = includeBackpackItems;
+            this.skipBackpackPrompt = skipBackpackPrompt;
+        }
+        public C2S_ShopTrade(FriendlyByteBuf b) {
+            this.c = b.readUtf(64);
+            this.i = b.readInt();
+            this.t = b.readUtf(16);
+            this.a = b.readInt();
+            this.includeBackpackItems = b.readBoolean();
+            this.skipBackpackPrompt = b.readBoolean();
+        }
+        public void toBytes(FriendlyByteBuf b) {
+            b.writeUtf(c, 64);
+            b.writeInt(i);
+            b.writeUtf(t, 16);
+            b.writeInt(a);
+            b.writeBoolean(includeBackpackItems);
+            b.writeBoolean(skipBackpackPrompt);
+        }
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isServer()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer p = ctx.get().getSender();
+                if (p != null && !p.isSpectator() && p.containerMenu instanceof ShopMenu m) {
+                    m.performTransaction(this.c, i, "BUY".equals(t), "SELL".equals(t), a, includeBackpackItems, skipBackpackPrompt);
                 }
             });
             ctx.get().setPacketHandled(true);
@@ -322,24 +422,28 @@ public class EvoMarketsPacketHandler {
         public final int backpackCount;
 
         public S2C_BackpackSellPrompt(String categoryId, int itemIndex, int backpackCount) {
-            this.categoryId = categoryId;
+            this.categoryId = categoryId != null ? categoryId : "";
             this.itemIndex = itemIndex;
             this.backpackCount = backpackCount;
         }
 
         public S2C_BackpackSellPrompt(FriendlyByteBuf b) {
-            this.categoryId = b.readUtf();
+            this.categoryId = b.readUtf(64);
             this.itemIndex = b.readInt();
             this.backpackCount = b.readInt();
         }
 
         public void toBytes(FriendlyByteBuf b) {
-            b.writeUtf(categoryId);
+            b.writeUtf(categoryId, 64);
             b.writeInt(itemIndex);
             b.writeInt(backpackCount);
         }
 
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isClient()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
                 ClientEvoMarketsHandler.showBackpackSellPrompt(categoryId, itemIndex, backpackCount);
             }));
@@ -348,12 +452,36 @@ public class EvoMarketsPacketHandler {
     }
 
     public static class C2S_EditShop {
-        public final String c,a; public final int f,t;
-        public C2S_EditShop(String c, int f, int t, String a){this.c=c;this.f=f;this.t=t;this.a=a;}
-        public C2S_EditShop(FriendlyByteBuf b){this.c=b.readUtf();this.f=b.readInt();this.t=b.readInt();this.a=b.readUtf();}
-        public void toBytes(FriendlyByteBuf b){b.writeUtf(c);b.writeInt(f);b.writeInt(t);b.writeUtf(a);}
-        public void handle(Supplier<NetworkEvent.Context> ctx){
-            ctx.get().enqueueWork(()->{if("SWAP".equals(a)) ShopConfigManager.get().swapItems(this.c,f,t);});
+        public final String c, a;
+        public final int f, t;
+        public C2S_EditShop(String c, int f, int t, String a) {
+            this.c = c != null ? c : "";
+            this.f = f;
+            this.t = t;
+            this.a = a != null ? a : "";
+        }
+        public C2S_EditShop(FriendlyByteBuf b) {
+            this.c = b.readUtf(64);
+            this.f = b.readInt();
+            this.t = b.readInt();
+            this.a = b.readUtf(32);
+        }
+        public void toBytes(FriendlyByteBuf b) {
+            b.writeUtf(c, 64);
+            b.writeInt(f);
+            b.writeInt(t);
+            b.writeUtf(a, 32);
+        }
+        public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isServer()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
+            ctx.get().enqueueWork(() -> {
+                ServerPlayer sender = ctx.get().getSender();
+                if (sender == null || !sender.hasPermissions(2)) return;
+                if ("SWAP".equals(a)) ShopConfigManager.get().swapItems(this.c, f, t);
+            });
             ctx.get().setPacketHandled(true);
         }
     }
@@ -366,6 +494,10 @@ public class EvoMarketsPacketHandler {
         public S2C_AuctionGlobalUpdate(FriendlyByteBuf b) {}
         public void toBytes(FriendlyByteBuf b) {}
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isClient()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
                 ClientEvoMarketsHandler.updateAuction();
             }));
@@ -374,11 +506,28 @@ public class EvoMarketsPacketHandler {
     }
 
     public static class C2S_AuctionFilter {
-        public final String i, s; public final int o;
-        public C2S_AuctionFilter(String i, String s, int o) { this.i = i; this.s = s; this.o = o; }
-        public C2S_AuctionFilter(FriendlyByteBuf b) { this.i = b.readUtf(); this.s = b.readUtf(); this.o = b.readInt(); }
-        public void toBytes(FriendlyByteBuf b) { b.writeUtf(i); b.writeUtf(s); b.writeInt(o); }
+        public final String i, s;
+        public final int o;
+        public C2S_AuctionFilter(String i, String s, int o) {
+            this.i = i != null ? i : "";
+            this.s = s != null ? s : "";
+            this.o = o;
+        }
+        public C2S_AuctionFilter(FriendlyByteBuf b) {
+            this.i = b.readUtf(128);
+            this.s = b.readUtf(128);
+            this.o = b.readInt();
+        }
+        public void toBytes(FriendlyByteBuf b) {
+            b.writeUtf(i, 128);
+            b.writeUtf(s, 128);
+            b.writeInt(o);
+        }
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isServer()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> {
                 ServerPlayer p = ctx.get().getSender();
                 if (p != null && p.containerMenu instanceof org.evocraft.evomarkets.ah.AuctionMenu m) {
@@ -394,10 +543,23 @@ public class EvoMarketsPacketHandler {
     // ========================================================
     public static class S2C_TradeNotification {
         public final String t, d;
-        public S2C_TradeNotification(String t, String d) { this.t=t; this.d=d; }
-        public S2C_TradeNotification(FriendlyByteBuf b) { this.t=b.readUtf(); this.d=b.readUtf(); }
-        public void toBytes(FriendlyByteBuf b) { b.writeUtf(t); b.writeUtf(d); }
+        public S2C_TradeNotification(String t, String d) {
+            this.t = t != null ? t : "";
+            this.d = d != null ? d : "";
+        }
+        public S2C_TradeNotification(FriendlyByteBuf b) {
+            this.t = b.readUtf(64);
+            this.d = b.readUtf(256);
+        }
+        public void toBytes(FriendlyByteBuf b) {
+            b.writeUtf(t, 64);
+            b.writeUtf(d, 256);
+        }
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isClient()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
                 ClientEvoMarketsHandler.showTradeNotification(t, d);
             }));
@@ -406,19 +568,29 @@ public class EvoMarketsPacketHandler {
     }
 
     public static class S2C_TradeSync {
-        public final double m1, m2; public final boolean a1, a2; public final int cd; public final String c, n1, n2;
+        public final double m1, m2;
+        public final boolean a1, a2;
+        public final int cd;
+        public final String c, n1, n2;
         public S2C_TradeSync(double m1, double m2, boolean a1, boolean a2, int cd, String c, String n1, String n2) {
-            this.m1=m1; this.m2=m2; this.a1=a1; this.a2=a2; this.cd=cd; this.c=c; this.n1=n1; this.n2=n2;
+            this.m1 = m1; this.m2 = m2; this.a1 = a1; this.a2 = a2; this.cd = cd;
+            this.c = c != null ? c : "[]";
+            this.n1 = n1 != null ? n1 : "";
+            this.n2 = n2 != null ? n2 : "";
         }
         public S2C_TradeSync(FriendlyByteBuf b) {
-            this.m1=b.readDouble(); this.m2=b.readDouble(); this.a1=b.readBoolean(); this.a2=b.readBoolean();
-            this.cd=b.readInt(); this.c=b.readUtf(); this.n1=b.readUtf(); this.n2=b.readUtf();
+            this.m1 = b.readDouble(); this.m2 = b.readDouble(); this.a1 = b.readBoolean(); this.a2 = b.readBoolean();
+            this.cd = b.readInt(); this.c = b.readUtf(16384); this.n1 = b.readUtf(64); this.n2 = b.readUtf(64);
         }
         public void toBytes(FriendlyByteBuf b) {
             b.writeDouble(m1); b.writeDouble(m2); b.writeBoolean(a1); b.writeBoolean(a2);
-            b.writeInt(cd); b.writeUtf(c); b.writeUtf(n1); b.writeUtf(n2);
+            b.writeInt(cd); b.writeUtf(c, 16384); b.writeUtf(n1, 64); b.writeUtf(n2, 64);
         }
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isClient()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> DistExecutor.unsafeRunWhenOn(Dist.CLIENT, () -> () -> {
                 ClientEvoMarketsHandler.syncTradeData(m1, m2, a1, a2, cd, c, n1, n2);
             }));
@@ -427,11 +599,28 @@ public class EvoMarketsPacketHandler {
     }
 
     public static class C2S_TradeAction {
-        public final String a, t; public final double m;
-        public C2S_TradeAction(String a, double m, String t) { this.a=a; this.m=m; this.t=t; }
-        public C2S_TradeAction(FriendlyByteBuf b) { this.a=b.readUtf(); this.m=b.readDouble(); this.t=b.readUtf(); }
-        public void toBytes(FriendlyByteBuf b) { b.writeUtf(a); b.writeDouble(m); b.writeUtf(t); }
+        public final String a, t;
+        public final double m;
+        public C2S_TradeAction(String a, double m, String t) {
+            this.a = a != null ? a : "";
+            this.m = m;
+            this.t = t != null ? t : "";
+        }
+        public C2S_TradeAction(FriendlyByteBuf b) {
+            this.a = b.readUtf(32);
+            this.m = b.readDouble();
+            this.t = b.readUtf(250);
+        }
+        public void toBytes(FriendlyByteBuf b) {
+            b.writeUtf(a, 32);
+            b.writeDouble(m);
+            b.writeUtf(t, 250);
+        }
         public void handle(Supplier<NetworkEvent.Context> ctx) {
+            if (!ctx.get().getDirection().getReceptionSide().isServer()) {
+                ctx.get().setPacketHandled(true);
+                return;
+            }
             ctx.get().enqueueWork(() -> {
                 ServerPlayer p = ctx.get().getSender();
                 if (p != null) org.evocraft.evomarkets.trade.TradeManager.get().handleAction(p, a, m, t);

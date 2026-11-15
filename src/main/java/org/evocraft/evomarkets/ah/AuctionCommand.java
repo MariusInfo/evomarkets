@@ -20,10 +20,18 @@ public class AuctionCommand {
 
                 // --- SELL ITEM (/ah sell <pret>) ---
                 .then(Commands.literal("sell")
-                        .then(Commands.argument("pret", DoubleArgumentType.doubleArg(1.0))
+                        .then(Commands.argument("pret", DoubleArgumentType.doubleArg(1.0, 1_000_000_000_000.0D))
                                 .executes(ctx -> {
                                     ServerPlayer player = ctx.getSource().getPlayerOrException();
+                                    if (player.isSpectator()) {
+                                        ctx.getSource().sendFailure(Component.literal("§c[!] Spectators cannot list items."));
+                                        return 0;
+                                    }
                                     double price = DoubleArgumentType.getDouble(ctx, "pret");
+                                    if (!Double.isFinite(price) || price < 1.0D) {
+                                        ctx.getSource().sendFailure(Component.literal("§c[!] Invalid price!"));
+                                        return 0;
+                                    }
                                     ItemStack handItem = player.getMainHandItem();
 
                                     if (handItem.isEmpty()) {
@@ -31,11 +39,10 @@ public class AuctionCommand {
                                         return 0;
                                     }
 
-                                    // The old 10 item limit was removed.
-
-                                    AuctionListing listing = new AuctionListing(player.getUUID(), player.getScoreboardName(), handItem.copy(), price);
+                                    ItemStack listedStack = handItem.copy();
+                                    AuctionListing listing = new AuctionListing(player.getUUID(), player.getScoreboardName(), listedStack, price);
+                                    handItem.setCount(0);
                                     AuctionMarketManager.get().addListing(listing);
-                                    handItem.shrink(handItem.getCount());
 
                                     ctx.getSource().sendSuccess(() -> Component.literal("§a[AH] Listed the item for " + EvoCurrencyFormatter.formatWithCurrency(price) + "!"), false);
                                     return 1;

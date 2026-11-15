@@ -32,11 +32,17 @@ public class CarShopAdminCommand {
                                                     if (handItem.isEmpty()) {
                                                         player.sendSystemMessage(Component.literal("§cHold the part in your hand!")); return 0;
                                                     }
-                                                    if (!CarShopManager.shopData.containsKey(category)) {
+                                                    if (!Double.isFinite(price) || price < 0) {
+                                                        player.sendSystemMessage(Component.literal("§cInvalid price!")); return 0;
+                                                    }
+                                                    if (!CarShopManager.hasCategory(category)) {
                                                         player.sendSystemMessage(Component.literal("§cCategories: BODY, WHEELS, ENGINE, ATTACHMENTS")); return 0;
                                                     }
 
                                                     ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(handItem.getItem());
+                                                    if (itemId == null) {
+                                                        player.sendSystemMessage(Component.literal("§cInvalid item!")); return 0;
+                                                    }
                                                     // SALVĂM NBT-UL ITEMULUI PENTRU A PĂSTRA MODELUL 3D!
                                                     String nbtStr = handItem.hasTag() ? handItem.getTag().toString() : "";
                                                     String uniqueId = UUID.randomUUID().toString();
@@ -54,7 +60,7 @@ public class CarShopAdminCommand {
                                             String category = StringArgumentType.getString(context, "category").toUpperCase();
                                             String name = StringArgumentType.getString(context, "name");
 
-                                            if (!CarShopManager.shopData.containsKey(category)) {
+                                            if (!CarShopManager.hasCategory(category)) {
                                                 player.sendSystemMessage(Component.literal("§cCategories: BODY, WHEELS, ENGINE, ATTACHMENTS")); return 0;
                                             }
 

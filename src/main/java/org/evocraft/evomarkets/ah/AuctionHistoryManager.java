@@ -22,13 +22,14 @@ public class AuctionHistoryManager {
         load();
     }
 
-    public static AuctionHistoryManager get() {
+    public static synchronized AuctionHistoryManager get() {
         if (INSTANCE == null) INSTANCE = new AuctionHistoryManager();
         return INSTANCE;
     }
 
     // Adauga o tranzactie noua (Apelat cand cineva cumpara)
-    public void addTransaction(UUID seller, String buyerName, String itemName, double price, double tax) {
+    public synchronized void addTransaction(UUID seller, String buyerName, String itemName, double price, double tax) {
+        if (seller == null) return;
         Transaction t = new Transaction();
         t.buyerName = buyerName;
         t.itemName = itemName;
@@ -47,22 +48,25 @@ public class AuctionHistoryManager {
         save();
     }
 
-    public List<Transaction> getHistory(UUID seller) {
-        return history.getOrDefault(seller, new ArrayList<>());
+    public synchronized List<Transaction> getHistory(UUID seller) {
+        if (seller == null) return new ArrayList<>();
+        return new ArrayList<>(history.getOrDefault(seller, Collections.emptyList()));
     }
 
-    public void save() {
+    public synchronized void save() {
+        File parent = saveFile.getParentFile();
+        if (parent != null && !parent.exists()) parent.mkdirs();
         try (Writer writer = new FileWriter(saveFile)) {
             gson.toJson(history, writer);
         } catch (IOException e) { e.printStackTrace(); }
     }
 
-    public void load() {
+    public synchronized void load() {
         if (!saveFile.exists()) return;
         try (Reader reader = new FileReader(saveFile)) {
             history = gson.fromJson(reader, new TypeToken<Map<UUID, List<Transaction>>>(){}.getType());
             if (history == null) history = new HashMap<>();
-        } catch (IOException e) { e.printStackTrace(); }
+        } catch (Exception e) { history = new HashMap<>(); }
     }
 
     public static class Transaction {

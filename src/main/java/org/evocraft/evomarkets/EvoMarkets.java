@@ -1,13 +1,11 @@
 package org.evocraft.evomarkets;
 
-import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.server.ServerStartingEvent;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
-import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 
 import org.evocraft.evomarkets.entity.SpawnDealerCommand;
@@ -40,7 +38,6 @@ public class EvoMarkets {
         MarketMenuTypes.register(modEventBus);
 
         modEventBus.addListener(this::setup);
-        modEventBus.addListener(this::clientSetup);
 
         MinecraftForge.EVENT_BUS.register(this);
     }
@@ -48,14 +45,6 @@ public class EvoMarkets {
     private void setup(final FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             EvoMarketsPacketHandler.register();
-        });
-    }
-
-    private void clientSetup(final FMLClientSetupEvent event) {
-        event.enqueueWork(() -> {
-            MenuScreens.register(MarketMenuTypes.SHOP_MENU.get(), org.evocraft.evomarkets.shop.ShopScreen::new);
-            MenuScreens.register(MarketMenuTypes.AUCTION_MENU.get(), org.evocraft.evomarkets.ah.AuctionScreen::new);
-            MenuScreens.register(MarketMenuTypes.TRADE_MENU.get(), org.evocraft.evomarkets.trade.TradeScreen::new);
         });
     }
 

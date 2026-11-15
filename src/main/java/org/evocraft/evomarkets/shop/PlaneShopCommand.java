@@ -1,6 +1,5 @@
 package org.evocraft.evomarkets.shop;
 
-import com.google.gson.Gson;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -16,7 +15,7 @@ public class PlaneShopCommand {
                 .executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
 
-                    String jsonData = new Gson().toJson(PlaneShopManager.shopData);
+                    String jsonData = PlaneShopManager.toJson();
 
                     EvoMarketsPacketHandler.INSTANCE.send(
                             PacketDistributor.PLAYER.with(() -> player),

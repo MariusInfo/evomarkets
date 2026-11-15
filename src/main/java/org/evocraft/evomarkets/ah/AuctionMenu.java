@@ -73,6 +73,7 @@ public class AuctionMenu extends AbstractContainerMenu {
 
     @Override
     public boolean clickMenuButton(Player player, int id) {
+        if (player.level().isClientSide) return true;
         int page = pageSlot.get();
 
         if (id == 0) {
@@ -98,85 +99,127 @@ public class AuctionMenu extends AbstractContainerMenu {
     @Override
     public void clicked(int slotId, int dragType, ClickType type, Player player) {
         if (slotId >= 0 && slotId < ITEMS_PER_PAGE) {
-            ItemStack stack = container.getItem(slotId);
-            if (!stack.isEmpty() && stack.hasTag()) {
-                CompoundTag tag = stack.getTag();
-                if (tag != null && tag.contains("AH_UUID")) {
-                    UUID id = UUID.fromString(tag.getString("AH_UUID"));
-                    if (player instanceof ServerPlayer sp) {
-                        // FIX: Am sters sp.closeContainer(); care cauza crash-ul!
-                        handleBuyRequest(sp, id);
-                        populateListings(); // Dam refresh instant la meniu in loc sa il inchidem
+            if (!player.level().isClientSide && player instanceof ServerPlayer sp && !sp.isSpectator()) {
+                ItemStack stack = container.getItem(slotId);
+                if (!stack.isEmpty() && stack.hasTag()) {
+                    CompoundTag tag = stack.getTag();
+                    if (tag != null && tag.contains("AH_UUID")) {
+                        try {
+                            UUID id = UUID.fromString(tag.getString("AH_UUID"));
+                            handleBuyRequest(sp, id);
+                            populateListings();
+                        } catch (IllegalArgumentException ignored) {}
                     }
-                    return;
                 }
             }
+            return;
         }
         super.clicked(slotId, dragType, type, player);
     }
 
-    public void handleBuyRequest(ServerPlayer player, UUID id) {
-        AuctionListing listing = AuctionMarketManager.get().getListing(id);
-        if (listing == null) return;
+    private boolean canFit(Inventory inv, ItemStack stack) {
+        if (stack == null || stack.isEmpty()) return false;
+        int leftToAdd = stack.getCount();
+        int maxStack = Math.max(1, stack.getMaxStackSize());
+        for (int i = 0; i < 36; i++) {
+            ItemStack slot = inv.getItem(i);
+            if (slot.isEmpty()) leftToAdd -= maxStack;
+            else if (ItemStack.isSameItemSameTags(slot, stack)) {
+                int space = maxStack - slot.getCount();
+                if (space > 0) leftToAdd -= space;
+            }
+            if (leftToAdd <= 0) return true;
+        }
+        return false;
+    }
 
-        if (listing.sellerUUID.equals(player.getUUID())) {
-            AuctionMarketManager.get().removeListing(id);
-            player.getInventory().add(listing.itemStack);
+    private void giveStack(ServerPlayer player, ItemStack itemStack) {
+        ItemStack copy = itemStack.copy();
+        if (!player.getInventory().add(copy) && !copy.isEmpty()) {
+            player.drop(copy, false);
+        }
+    }
+
+    public void handleBuyRequest(ServerPlayer player, UUID id) {
+        if (player == null || id == null || player.isSpectator()) return;
+        AuctionMarketManager manager = AuctionMarketManager.get();
+
+        AuctionListing listing;
+        boolean reclaim;
+        synchronized (manager) {
+            listing = manager.getListing(id);
+            if (listing == null || listing.itemStack == null || listing.itemStack.isEmpty()) return;
+
+            if (!canFit(player.getInventory(), listing.itemStack)) {
+                player.sendSystemMessage(Component.literal("§cInventory full! Clear some space first."));
+                return;
+            }
+
+            reclaim = player.getUUID().equals(listing.sellerUUID);
+            if (reclaim) {
+                if (!manager.removeListing(id)) return;
+            } else {
+                if (!Double.isFinite(listing.price) || listing.price <= 0.0D) return;
+                if (!EconomyManager.get().tryWithdraw(player.getUUID(), listing.price)) {
+                    player.sendSystemMessage(Component.literal("§cInsufficient funds!"));
+                    return;
+                }
+                if (!manager.removeListing(id)) {
+                    EconomyManager.get().addBalance(player.getUUID(), listing.price);
+                    return;
+                }
+            }
+        }
+
+        if (reclaim) {
+            giveStack(player, listing.itemStack);
             player.sendSystemMessage(Component.literal("§eItem recuperat cu succes."));
             return;
         }
 
-        double bal = EconomyManager.get().getBalance(player.getUUID());
+        PacketHandler.sendToPlayer(new PacketHandler.S2C_SyncBalance(EconomyManager.get().getBalance(player.getUUID())), player);
 
-        if (bal < listing.price) {
-            player.sendSystemMessage(Component.literal("§cInsufficient funds!"));
-            return;
+        double tax = 0.0D;
+        double profit = listing.price;
+
+        try {
+            EconomyManager.get().addBalance(listing.sellerUUID, profit);
+        } catch (Exception e) {
+            System.out.println("[EvoMarkets] Could not add funds for offline player: " + listing.sellerName);
         }
 
-        if (AuctionMarketManager.get().removeListing(id)) {
-            EconomyManager.get().removeBalance(player.getUUID(), listing.price);
-            PacketHandler.sendToPlayer(new PacketHandler.S2C_SyncBalance(EconomyManager.get().getBalance(player.getUUID())), player);
+        giveStack(player, listing.itemStack);
+        player.sendSystemMessage(Component.literal("§aYou bought the item!"));
 
-            double tax = 0.0D;
-            double profit = listing.price;
+        AuctionHistoryManager.get().addTransaction(
+                listing.sellerUUID,
+                player.getName().getString(),
+                listing.itemStack.getHoverName().getString(),
+                listing.price,
+                tax
+        );
 
-            // Daca cumva PlayerStatsManager returneaza null cand seller-ul e offline, nu mai pica tot AH-ul!
-            try {
-                EconomyManager.get().addBalance(listing.sellerUUID, profit);
-            } catch (Exception e) {
-                System.out.println("[EvoMarkets] Could not add funds for offline player: " + listing.sellerName);
-            }
-
-            player.getInventory().add(listing.itemStack);
-
-            player.sendSystemMessage(Component.literal("§aYou bought the item!"));
-
-            AuctionHistoryManager.get().addTransaction(
-                    listing.sellerUUID,
-                    player.getName().getString(),
-                    listing.itemStack.getHoverName().getString(),
-                    listing.price,
-                    tax
-            );
-
-            MinecraftServer server = player.getServer();
-            if (server != null) {
-                ServerPlayer seller = server.getPlayerList().getPlayer(listing.sellerUUID);
-                if (seller != null) {
-                    seller.sendSystemMessage(Component.literal("§a[AH] Item sold! Received: " + EvoCurrencyFormatter.formatWithCurrency(profit)));
-                    PacketHandler.sendToPlayer(new PacketHandler.S2C_SyncBalance(EconomyManager.get().getBalance(seller.getUUID())), seller);
-                }
+        MinecraftServer server = player.getServer();
+        if (server != null) {
+            ServerPlayer seller = server.getPlayerList().getPlayer(listing.sellerUUID);
+            if (seller != null) {
+                seller.sendSystemMessage(Component.literal("§a[AH] Item sold! Received: " + EvoCurrencyFormatter.formatWithCurrency(profit)));
+                PacketHandler.sendToPlayer(new PacketHandler.S2C_SyncBalance(EconomyManager.get().getBalance(seller.getUUID())), seller);
             }
         }
     }
 
     private List<AuctionListing> getFilteredListings() {
+        String itemFilter = searchItem != null ? searchItem.toLowerCase() : "";
+        String sellerFilter = searchSeller != null ? searchSeller.toLowerCase() : "";
         List<AuctionListing> list = AuctionMarketManager.get().getAllListings()
                 .stream()
                 .filter(l -> {
-                    if (showMyListings && !l.sellerUUID.equals(player.getUUID())) return false;
-                    if (!searchItem.isEmpty() && !l.itemStack.getHoverName().getString().toLowerCase().contains(searchItem.toLowerCase())) return false;
-                    if (!searchSeller.isEmpty() && !l.sellerName.toLowerCase().contains(searchSeller.toLowerCase())) return false;
+                    if (l == null || l.itemStack == null || l.itemStack.isEmpty()) return false;
+                    if (showMyListings && !player.getUUID().equals(l.sellerUUID)) return false;
+                    if (!itemFilter.isEmpty() && !l.itemStack.getHoverName().getString().toLowerCase().contains(itemFilter)) return false;
+                    String sellerName = l.sellerName != null ? l.sellerName.toLowerCase() : "";
+                    if (!sellerFilter.isEmpty() && !sellerName.contains(sellerFilter)) return false;
                     return true;
                 })
                 .collect(Collectors.toList());
@@ -213,7 +256,7 @@ public class AuctionMenu extends AbstractContainerMenu {
 
             tag.putString("AH_UUID", l.id.toString());
             tag.putDouble("AH_Price", l.price);
-            tag.putString("AH_Seller", l.sellerName);
+            tag.putString("AH_Seller", l.sellerName != null ? l.sellerName : "Unknown");
             tag.putString("AH_SellerUUID", l.sellerUUID.toString());
 
             container.setItem(slot++, display);
@@ -221,7 +264,7 @@ public class AuctionMenu extends AbstractContainerMenu {
     }
 
     @Override public ItemStack quickMoveStack(Player p, int i) { return ItemStack.EMPTY; }
-    @Override public boolean stillValid(Player p) { return true; }
+    @Override public boolean stillValid(Player p) { return !p.isSpectator() && p.isAlive(); }
 
     public void cycleSort() {
         this.sortOrder++;
@@ -232,9 +275,10 @@ public class AuctionMenu extends AbstractContainerMenu {
     public int getPage() { return pageSlot.get(); }
 
     public void updateFiltersFromServer(String item, String seller, int sort) {
-        this.searchItem = item;
-        this.searchSeller = seller;
-        this.sortOrder = sort;
+        this.searchItem = item != null ? item : "";
+        this.searchSeller = seller != null ? seller : "";
+        this.sortOrder = (sort >= 0 && sort <= 2) ? sort : 0;
+        pageSlot.set(0);
         populateListings();
     }
 }
