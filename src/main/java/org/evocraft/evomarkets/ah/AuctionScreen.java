@@ -74,17 +74,29 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
         });
 
         btnMyListings = new CustomButton("All Items", 0, 0, 110, 20, () -> {
-            this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 0);
-            this.menu.showMyListings = !this.menu.showMyListings;
-            updateMyListingsText();
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 0);
+                this.menu.showMyListings = !this.menu.showMyListings;
+                updateMyListingsText();
+            }
         });
 
-        btnPrev = new CustomButton("< Previous Page", 0, 0, 115, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 2));
-        btnNext = new CustomButton("Next Page >", 0, 0, 115, 20, () -> this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1));
+        btnPrev = new CustomButton("< Previous Page", 0, 0, 115, 20, () -> {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 2);
+            }
+        });
+        btnNext = new CustomButton("Next Page >", 0, 0, 115, 20, () -> {
+            if (this.minecraft != null && this.minecraft.gameMode != null) {
+                this.minecraft.gameMode.handleInventoryButtonClick(this.menu.containerId, 1);
+            }
+        });
         btnClose = new CustomButton("Close", 0, 0, 70, 20, this::onClose);
 
         btnAction = new CustomButton("§aBUY", 0, 0, 140, 25, () -> {
-            if (selectedVisualSlot != -1) {
+            if (selectedVisualSlot >= 0 && selectedVisualSlot < 20
+                    && this.menu.getSlot(selectedVisualSlot).hasItem()
+                    && this.minecraft != null && this.minecraft.gameMode != null && this.minecraft.player != null) {
                 this.minecraft.gameMode.handleInventoryMouseClick(this.menu.containerId, selectedVisualSlot, 0, net.minecraft.world.inventory.ClickType.PICKUP, this.minecraft.player);
                 targetSlide = 0f; selectedVisualSlot = -1;
             }
@@ -105,6 +117,7 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
     }
 
     private void syncFilters() {
+        if (searchItemBox == null || searchSellerBox == null) return;
         EvoMarketsPacketHandler.INSTANCE.sendToServer(new EvoMarketsPacketHandler.C2S_AuctionFilter(searchItemBox.getValue(), searchSellerBox.getValue(), menu.sortOrder));
     }
 
@@ -170,6 +183,10 @@ public class AuctionScreen extends AbstractContainerScreen<AuctionMenu> {
 
     @Override
     public void render(@NotNull GuiGraphics g, int mouseX, int mouseY, float delta) {
+        if (selectedVisualSlot < 0 || selectedVisualSlot >= 20 || !this.menu.getSlot(selectedVisualSlot).hasItem()) {
+            targetSlide = 0f;
+            selectedVisualSlot = -1;
+        }
         currentSlide += (targetSlide - currentSlide) * 0.2f;
         if (Math.abs(currentSlide - targetSlide) < 0.005f) currentSlide = targetSlide;
 

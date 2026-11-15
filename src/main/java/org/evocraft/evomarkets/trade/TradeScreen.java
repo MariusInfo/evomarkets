@@ -99,8 +99,8 @@ public class TradeScreen extends AbstractContainerScreen<TradeMenu> {
 
     private void processMoneyInput() {
         try {
-            double val = Double.parseDouble(moneyInput.getValue());
-            if (val > 0) {
+            double val = Double.parseDouble(moneyInput.getValue().trim());
+            if (Double.isFinite(val) && val > 0) {
                 sendAct("ADD_MONEY", val, "");
                 moneyInput.setValue("");
             }
@@ -167,7 +167,12 @@ public class TradeScreen extends AbstractContainerScreen<TradeMenu> {
     public static void syncData(double m1, double m2, boolean a1, boolean a2, int cd, String jsonChat, String n1, String n2) {
         myMoney = m1; theirMoney = m2; myAccept = a1; theirAccept = a2; countdown = cd; myName = n1; theirName = n2;
         if (jsonChat != null && !jsonChat.isEmpty() && !jsonChat.equals("null")) {
-            chatLog = new Gson().fromJson(jsonChat, new TypeToken<List<String>>(){}.getType());
+            try {
+                List<String> parsed = new Gson().fromJson(jsonChat, new TypeToken<List<String>>(){}.getType());
+                chatLog = parsed != null ? parsed : new ArrayList<>();
+            } catch (Exception ignored) {
+                chatLog = new ArrayList<>();
+            }
         } else { chatLog = new ArrayList<>(); }
     }
 
@@ -348,7 +353,7 @@ public class TradeScreen extends AbstractContainerScreen<TradeMenu> {
             if (b.checkClick(smx, smy)) return true;
         }
 
-        return super.mouseClicked(mouseX, mouseY, button);
+        return super.mouseClicked(smx, smy, button);
     }
 
     // --- CLASA PENTRU BUTOANE COMPLET CUSTOM ---

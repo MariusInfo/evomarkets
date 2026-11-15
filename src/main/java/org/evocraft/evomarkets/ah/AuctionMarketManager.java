@@ -36,25 +36,28 @@ public class AuctionMarketManager {
         load();
     }
 
-    public static void initialize() {
+    public static synchronized void initialize() {
         if (INSTANCE == null) INSTANCE = new AuctionMarketManager();
     }
 
-    public static AuctionMarketManager get() {
+    public static synchronized AuctionMarketManager get() {
+        if (INSTANCE == null) INSTANCE = new AuctionMarketManager();
         return INSTANCE;
     }
 
     // --- OPERAȚII ---
 
-    public void addListing(AuctionListing listing) {
+    public synchronized void addListing(AuctionListing listing) {
+        if (listing == null || listing.id == null || listing.sellerUUID == null || listing.itemStack == null || listing.itemStack.isEmpty()) return;
         listings.add(listing);
         save();
         // SINCRONIZARE INSTANTĂ: Notificăm toți jucătorii că s-a adăugat ceva nou
         broadcastUpdate();
     }
 
-    public boolean removeListing(UUID listingId) {
-        boolean removed = listings.removeIf(l -> l.id.equals(listingId));
+    public synchronized boolean removeListing(UUID listingId) {
+        if (listingId == null) return false;
+        boolean removed = listings.removeIf(l -> l != null && listingId.equals(l.id));
         if (removed) {
             save();
             // SINCRONIZARE INSTANTĂ: Notificăm toți jucătorii că un item a dispărut
@@ -70,26 +73,30 @@ public class AuctionMarketManager {
         EvoMarketsPacketHandler.INSTANCE.send(PacketDistributor.ALL.noArg(), new EvoMarketsPacketHandler.S2C_AuctionGlobalUpdate());
     }
 
-    public List<AuctionListing> getAllListings() {
+    public synchronized List<AuctionListing> getAllListings() {
         return new ArrayList<>(listings);
     }
 
-    public List<AuctionListing> getListingsByPlayer(UUID playerUUID) {
+    public synchronized List<AuctionListing> getListingsByPlayer(UUID playerUUID) {
+        if (playerUUID == null) return new ArrayList<>();
         return listings.stream()
-                .filter(l -> l.sellerUUID.equals(playerUUID))
+                .filter(l -> l != null && playerUUID.equals(l.sellerUUID))
                 .collect(Collectors.toList());
     }
 
-    public AuctionListing getListing(UUID id) {
+    public synchronized AuctionListing getListing(UUID id) {
+        if (id == null) return null;
         return listings.stream()
-                .filter(l -> l.id.equals(id))
+                .filter(l -> l != null && id.equals(l.id))
                 .findFirst()
                 .orElse(null);
     }
 
     // --- SALVARE / ÎNCĂRCARE ---
 
-    public void save() {
+    public synchronized void save() {
+        File parent = saveFile.getParentFile();
+        if (parent != null && !parent.exists()) parent.mkdirs();
         try (Writer writer = new FileWriter(saveFile)) {
             gson.toJson(listings, writer);
         } catch (IOException e) {
@@ -97,17 +104,21 @@ public class AuctionMarketManager {
         }
     }
 
-    public void load() {
+    public synchronized void load() {
         if (!saveFile.exists()) return;
         try (Reader reader = new FileReader(saveFile)) {
             AuctionListing[] loaded = gson.fromJson(reader, AuctionListing[].class);
             if (loaded != null) {
                 listings.clear();
                 for (AuctionListing l : loaded) {
-                    listings.add(l);
+                    if (l != null && l.id != null && l.sellerUUID != null
+                            && l.itemStack != null && !l.itemStack.isEmpty()
+                            && Double.isFinite(l.price) && l.price >= 1.0D) {
+                        listings.add(l);
+                    }
                 }
             }
-        } catch (IOException e) {
+        } catch (Exception e) {
             LOGGER.error("Error loading auctions: ", e);
         }
     }

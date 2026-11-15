@@ -26,23 +26,25 @@ public class ShopStationManager {
         load();
     }
 
-    public static void initialize() {
+    public static synchronized void initialize() {
         if (INSTANCE == null) INSTANCE = new ShopStationManager();
     }
 
     // FIX ANTI-CRASH APLICAT AICI
-    public static ShopStationManager get() {
+    public static synchronized ShopStationManager get() {
         if (INSTANCE == null) INSTANCE = new ShopStationManager();
         return INSTANCE;
     }
 
-    public void addStation(Level level, BlockPos pos) {
+    public synchronized void addStation(Level level, BlockPos pos) {
+        if (level == null || pos == null) return;
         String dim = level.dimension().location().toString();
-        stations.computeIfAbsent(dim, k -> new HashSet<>()).add(pos);
+        stations.computeIfAbsent(dim, k -> new HashSet<>()).add(pos.immutable());
         save();
     }
 
-    public void removeStation(Level level, BlockPos pos) {
+    public synchronized void removeStation(Level level, BlockPos pos) {
+        if (level == null || pos == null) return;
         String dim = level.dimension().location().toString();
         if (stations.containsKey(dim)) {
             stations.get(dim).remove(pos);
@@ -50,12 +52,15 @@ public class ShopStationManager {
         }
     }
 
-    public boolean isStation(Level level, BlockPos pos) {
+    public synchronized boolean isStation(Level level, BlockPos pos) {
+        if (level == null || pos == null) return false;
         String dim = level.dimension().location().toString();
         return stations.containsKey(dim) && stations.get(dim).contains(pos);
     }
 
-    public void save() {
+    public synchronized void save() {
+        File parent = saveFile.getParentFile();
+        if (parent != null && !parent.exists()) parent.mkdirs();
         try (Writer writer = new FileWriter(saveFile)) {
             gson.toJson(stations, writer);
         } catch (IOException e) {
@@ -63,13 +68,14 @@ public class ShopStationManager {
         }
     }
 
-    public void load() {
+    public synchronized void load() {
         if (!saveFile.exists()) return;
         try (Reader reader = new FileReader(saveFile)) {
             Type type = new TypeToken<Map<String, Set<BlockPos>>>(){}.getType();
             Map<String, Set<BlockPos>> loaded = gson.fromJson(reader, type);
+            stations.clear();
             if (loaded != null) stations.putAll(loaded);
-        } catch (IOException e) {
+        } catch (Exception e) {
             e.printStackTrace();
         }
     }

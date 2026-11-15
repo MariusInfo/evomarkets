@@ -32,11 +32,17 @@ public class PlaneShopAdminCommand {
                                                     if (handItem.isEmpty()) {
                                                         player.sendSystemMessage(Component.literal("§cHold the part in your hand!")); return 0;
                                                     }
-                                                    if (!PlaneShopManager.shopData.containsKey(category)) {
+                                                    if (!Double.isFinite(price) || price < 0) {
+                                                        player.sendSystemMessage(Component.literal("§cInvalid price!")); return 0;
+                                                    }
+                                                    if (!PlaneShopManager.hasCategory(category)) {
                                                         player.sendSystemMessage(Component.literal("§cAllowed categories: BODY, ENGINE, ATTACHMENTS")); return 0;
                                                     }
 
                                                     ResourceLocation itemId = ForgeRegistries.ITEMS.getKey(handItem.getItem());
+                                                    if (itemId == null) {
+                                                        player.sendSystemMessage(Component.literal("§cInvalid item!")); return 0;
+                                                    }
                                                     String nbtStr = handItem.hasTag() ? handItem.getTag().toString() : "";
                                                     String uniqueId = UUID.randomUUID().toString();
 
@@ -52,7 +58,7 @@ public class PlaneShopAdminCommand {
                                             String category = StringArgumentType.getString(context, "category").toUpperCase();
                                             String name = StringArgumentType.getString(context, "name");
 
-                                            if (!PlaneShopManager.shopData.containsKey(category)) {
+                                            if (!PlaneShopManager.hasCategory(category)) {
                                                 player.sendSystemMessage(Component.literal("§cAllowed categories: BODY, ENGINE, ATTACHMENTS")); return 0;
                                             }
 

@@ -1,6 +1,5 @@
 package org.evocraft.evomarkets.shop;
 
-import com.google.gson.Gson;
 import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -16,10 +15,8 @@ public class CarShopCommand {
                 .executes(context -> {
                     ServerPlayer player = context.getSource().getPlayerOrException();
 
-                    // Creăm un Gson nou aici ca să fentăm eroarea de "private access"
-                    String jsonData = new Gson().toJson(CarShopManager.shopData);
+                    String jsonData = CarShopManager.toJson();
 
-                    // Trimitem pachetul către client să deschidă interfața grafică!
                     EvoMarketsPacketHandler.INSTANCE.send(
                             PacketDistributor.PLAYER.with(() -> player),
                             new EvoMarketsPacketHandler.S2C_OpenCarShop(jsonData)

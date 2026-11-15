@@ -42,6 +42,8 @@ public class CarShopScreen extends Screen {
     private float currentSlide = 0f;
     private float targetSlide = 0f;
     private CarShopManager.CarPart visualPart = null;
+    private int lastLayoutShift = Integer.MIN_VALUE;
+    private boolean lastLayoutAddButton = false;
 
     private Map<String, List<CarShopManager.CarPart>> shopData;
 
@@ -52,6 +54,7 @@ public class CarShopScreen extends Screen {
         try {
             shopData = new Gson().fromJson(jsonData, new TypeToken<Map<String, List<CarShopManager.CarPart>>>(){}.getType());
         } catch (Exception e) { shopData = new HashMap<>(); }
+        if (shopData == null) shopData = new HashMap<>();
     }
 
     private float getScale() {
@@ -61,12 +64,12 @@ public class CarShopScreen extends Screen {
         return 1.0f;
     }
 
-    @SuppressWarnings("deprecation")
     private ItemStack createItemStack(CarShopManager.CarPart part) {
-        // Fix: Folosim "none".equals pentru a evita NPE dacă part.id este null
-        if (part == null || "none".equals(part.id)) return new ItemStack(Items.BARRIER);
+        if (part == null || part.id == null || part.id.isEmpty() || "none".equals(part.id)) return new ItemStack(Items.BARRIER);
 
-        var item = ForgeRegistries.ITEMS.getValue(new ResourceLocation(part.id));
+        ResourceLocation rl = ResourceLocation.tryParse(part.id);
+        if (rl == null) return new ItemStack(Items.BARRIER);
+        var item = ForgeRegistries.ITEMS.getValue(rl);
         if (item == null || item == Items.AIR) return new ItemStack(Items.BARRIER);
 
         ItemStack stack = new ItemStack(item);
@@ -79,6 +82,10 @@ public class CarShopScreen extends Screen {
     @Override
     protected void init() {
         super.init();
+        updateLayout();
+    }
+
+    private void updateLayout() {
         buttons.clear(); navButtons.clear();
 
         float scale = getScale();
@@ -86,6 +93,10 @@ public class CarShopScreen extends Screen {
         int sh = (int) (this.height / scale);
 
         int shift = (int) (currentSlide * 80);
+        boolean showAddBtn = visualPart != null && currentSlide > 0.1f;
+        lastLayoutShift = shift;
+        lastLayoutAddButton = showAddBtn;
+
         this.leftPos = (sw - this.imageWidth) / 2 - shift;
         this.topPos = (sh - this.imageHeight) / 2;
 
@@ -95,43 +106,46 @@ public class CarShopScreen extends Screen {
         navButtons.add(new CustomButton("§c✖ Close", this.leftPos + this.imageWidth - 80, this.topPos + 10, 70, 20, this::onClose));
 
         if (currentTab != Tab.CHECKOUT) {
-            List<CarShopManager.CarPart> currentParts = shopData.getOrDefault(currentTab.name(), new ArrayList<>());
+            List<CarShopManager.CarPart> currentParts = shopData != null
+                    ? shopData.getOrDefault(currentTab.name(), Collections.emptyList())
+                    : Collections.emptyList();
+            if (currentParts == null) currentParts = Collections.emptyList();
 
-            // ==========================================
-            // FIX PAGINARE: Afișează max 6 pe pagină
-            // ==========================================
             int maxPages = (int) Math.ceil(currentParts.size() / 6.0);
             if (maxPages == 0) maxPages = 1;
+            if (currentPage >= maxPages) currentPage = maxPages - 1;
+            if (currentPage < 0) currentPage = 0;
+
             int startIndex = currentPage * 6;
             int endIndex = Math.min(startIndex + 6, currentParts.size());
 
             int col = 0, row = 0;
             for (int i = startIndex; i < endIndex; i++) {
                 CarShopManager.CarPart part = currentParts.get(i);
+                if (part == null) continue;
                 buttons.add(new ItemButton(part, mainX + col * 115, mainY + row * 120, 105, 110, () -> {
                     if (visualPart != part) {
                         visualPart = part; targetSlide = 1.0f;
                     } else {
                         targetSlide = 0f; visualPart = null;
                     }
+                    updateLayout();
                 }));
                 col++; if (col >= 3) { col = 0; row++; }
             }
 
-            // Butoanele pentru paginare (Dacă există mai mult de o pagină)
             if (maxPages > 1) {
                 if (currentPage > 0) {
                     navButtons.add(new CustomButton("< Prev", mainX, mainY + 235, 80, 20, () -> {
-                        currentPage--; this.init();
+                        currentPage--; updateLayout();
                     }));
                 }
                 if (currentPage < maxPages - 1) {
                     navButtons.add(new CustomButton("Next >", mainX + 255, mainY + 235, 80, 20, () -> {
-                        currentPage++; this.init();
+                        currentPage++; updateLayout();
                     }));
                 }
             }
-            // ==========================================
 
             Tab nextTab = getNextTab(currentTab);
             navButtons.add(new CustomButton(currentTab == Tab.ATTACHMENTS ? "Checkout >" : "Skip >", mainX + 110, this.topPos + this.imageHeight - 40, 140, 25, () -> switchTab(nextTab)));
@@ -142,9 +156,9 @@ public class CarShopScreen extends Screen {
             double total = (selBody != null ? selBody.price : 0) + (selWheels != null ? selWheels.price : 0) + (selEngine != null ? selEngine.price : 0) + (selAttach != null ? selAttach.price : 0);
 
             navButtons.add(new CustomButton("§aPAY " + formatPrice(total) + " Evo", mainX + 110, this.topPos + this.imageHeight - 40, 200, 25, () -> {
-                if (total == 0) { this.minecraft.player.sendSystemMessage(Component.literal("§cYour cart is empty!")); return; }
+                if (this.minecraft == null || this.minecraft.player == null) return;
+                if (total <= 0) { this.minecraft.player.sendSystemMessage(Component.literal("§cYour cart is empty!")); return; }
                 if (ClientBalanceData.getBalance() >= total) {
-                    // Fix: Ne asigurăm că nu trimitem valori null serverului
                     EvoMarketsPacketHandler.INSTANCE.sendToServer(new EvoMarketsPacketHandler.C2S_BuyCarPacket(
                             (selBody != null && selBody.uuid != null) ? selBody.uuid : "none",
                             (selWheels != null && selWheels.uuid != null) ? selWheels.uuid : "none",
@@ -158,7 +172,7 @@ public class CarShopScreen extends Screen {
             }));
         }
 
-        if (visualPart != null && currentSlide > 0.1f) {
+        if (showAddBtn) {
             navButtons.add(new CustomButton("§aADD TO CART", this.leftPos + this.imageWidth + 15, this.topPos + this.imageHeight - 60, 130, 25, () -> {
                 if (currentTab == Tab.BODY) selBody = visualPart;
                 if (currentTab == Tab.WHEELS) selWheels = visualPart;
@@ -173,14 +187,19 @@ public class CarShopScreen extends Screen {
     private Tab getPrevTab(Tab t) { return Tab.values()[Math.max(t.ordinal() - 1, 0)]; }
 
     private void switchTab(Tab newTab) {
-        this.currentTab = newTab; this.currentPage = 0; this.targetSlide = 0f; this.visualPart = null; this.init();
+        this.currentTab = newTab; this.currentPage = 0; this.targetSlide = 0f; this.visualPart = null; updateLayout();
     }
 
     @Override
     public void render(GuiGraphics g, int mouseX, int mouseY, float pt) {
         currentSlide += (targetSlide - currentSlide) * 0.2f;
         if (Math.abs(currentSlide - targetSlide) < 0.005f) currentSlide = targetSlide;
-        this.init();
+
+        int shift = (int) (currentSlide * 80);
+        boolean showAddBtn = visualPart != null && currentSlide > 0.1f;
+        if (shift != lastLayoutShift || showAddBtn != lastLayoutAddButton) {
+            updateLayout();
+        }
 
         float scale = getScale();
         int smx = (int) (mouseX / scale); int smy = (int) (mouseY / scale);
@@ -206,19 +225,19 @@ public class CarShopScreen extends Screen {
 
         int textY = this.topPos + 40;
         g.drawString(this.font, "Body:", this.leftPos + 15, textY, TEXT_COLOR);
-        if (selBody != null) g.drawString(this.font, "§a" + selBody.name, this.leftPos + 15, textY + 12, 0xFFFFFF);
+        if (selBody != null) g.drawString(this.font, "§a" + safeName(selBody.name), this.leftPos + 15, textY + 12, 0xFFFFFF);
         textY += 30;
 
         g.drawString(this.font, "Wheels:", this.leftPos + 15, textY, TEXT_COLOR);
-        if (selWheels != null) g.drawString(this.font, "§a" + selWheels.name, this.leftPos + 15, textY + 12, 0xFFFFFF);
+        if (selWheels != null) g.drawString(this.font, "§a" + safeName(selWheels.name), this.leftPos + 15, textY + 12, 0xFFFFFF);
         textY += 30;
 
         g.drawString(this.font, "Engine:", this.leftPos + 15, textY, TEXT_COLOR);
-        if (selEngine != null) g.drawString(this.font, "§a" + selEngine.name, this.leftPos + 15, textY + 12, 0xFFFFFF);
+        if (selEngine != null) g.drawString(this.font, "§a" + safeName(selEngine.name), this.leftPos + 15, textY + 12, 0xFFFFFF);
         textY += 30;
 
         g.drawString(this.font, "Accessory:", this.leftPos + 15, textY, TEXT_COLOR);
-        if (selAttach != null) g.drawString(this.font, "§a" + selAttach.name, this.leftPos + 15, textY + 12, 0xFFFFFF);
+        if (selAttach != null) g.drawString(this.font, "§a" + safeName(selAttach.name), this.leftPos + 15, textY + 12, 0xFFFFFF);
 
         double total = (selBody != null ? selBody.price : 0) + (selWheels != null ? selWheels.price : 0) + (selEngine != null ? selEngine.price : 0) + (selAttach != null ? selAttach.price : 0);
         g.fill(this.leftPos + 15, this.topPos + this.imageHeight - 65, this.leftPos + sidebarW + 5, this.topPos + this.imageHeight - 64, CARD_BORDER);
@@ -267,7 +286,7 @@ public class CarShopScreen extends Screen {
                     g.pose().pushPose();
                     g.pose().translate(px + boxW / 2f, py + boxH - 25, 0);
                     g.pose().scale(0.85f, 0.85f, 1.0f);
-                    g.drawCenteredString(this.font, part.name, 0, 0, TEXT_COLOR);
+                    g.drawCenteredString(this.font, safeName(part.name), 0, 0, TEXT_COLOR);
                     g.drawCenteredString(this.font, "§a" + formatPrice(part.price) + " Evo", 0, 12, 0xFFFFFF);
                     g.pose().popPose();
                 } else {
@@ -289,7 +308,7 @@ public class CarShopScreen extends Screen {
                 g.renderItem(createItemStack(visualPart), -8, -8);
                 g.pose().popPose();
 
-                g.drawCenteredString(this.font, visualPart.name, infoX + 80, this.topPos + 160, 0xFFFFFF);
+                g.drawCenteredString(this.font, safeName(visualPart.name), infoX + 80, this.topPos + 160, 0xFFFFFF);
                 g.drawCenteredString(this.font, "Price: §a" + formatPrice(visualPart.price) + " Evo", infoX + 80, this.topPos + 180, TEXT_COLOR);
             }
 
@@ -304,6 +323,10 @@ public class CarShopScreen extends Screen {
         for (CustomButton b : navButtons) b.render(g, smx, smy, this.font, false);
 
         g.pose().popPose();
+    }
+
+    private String safeName(String name) {
+        return name != null ? name : "Part";
     }
 
     private void fillRounded(GuiGraphics g, int x, int y, int w, int h, int color) {
@@ -322,8 +345,8 @@ public class CarShopScreen extends Screen {
     public boolean mouseClicked(double mx, double my, int btn) {
         float scale = getScale();
         int smx = (int) (mx / scale); int smy = (int) (my / scale);
-        for (ItemButton b : buttons) if (b.checkClick(smx, smy)) return true;
-        for (CustomButton b : navButtons) if (b.checkClick(smx, smy)) return true;
+        for (ItemButton b : new ArrayList<>(buttons)) if (b.checkClick(smx, smy)) return true;
+        for (CustomButton b : new ArrayList<>(navButtons)) if (b.checkClick(smx, smy)) return true;
         return super.mouseClicked(mx, my, btn);
     }
 

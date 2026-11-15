@@ -5,6 +5,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleMenuProvider;
 import net.minecraft.world.entity.player.Player;
@@ -23,6 +24,7 @@ public class AuctionEvents {
         if (event.getHand() != InteractionHand.MAIN_HAND) return;
 
         Player player = event.getEntity();
+        if (player.isSpectator()) return;
         Level level = event.getLevel();
         BlockPos pos = event.getPos();
 
@@ -35,6 +37,7 @@ public class AuctionEvents {
                 );
                 NetworkHooks.openScreen(serverPlayer, container, pos);
             }
+            event.setCancellationResult(InteractionResult.SUCCESS);
             event.setCanceled(true);
         }
     }

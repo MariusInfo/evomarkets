@@ -33,11 +33,11 @@ public class PlaneDealerEntity extends PathfinderMob {
 
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
-        if (!this.level().isClientSide() && hand == InteractionHand.MAIN_HAND) {
+        if (!this.level().isClientSide() && hand == InteractionHand.MAIN_HAND && player instanceof ServerPlayer sp && !sp.isSpectator()) {
             ensureEnglishName();
-            String jsonData = PlaneShopManager.GSON.toJson(PlaneShopManager.shopData);
+            String jsonData = PlaneShopManager.toJson();
             EvoMarketsPacketHandler.INSTANCE.send(
-                    PacketDistributor.PLAYER.with(() -> (ServerPlayer) player),
+                    PacketDistributor.PLAYER.with(() -> sp),
                     new EvoMarketsPacketHandler.S2C_OpenPlaneShop(jsonData)
             );
             return InteractionResult.SUCCESS;

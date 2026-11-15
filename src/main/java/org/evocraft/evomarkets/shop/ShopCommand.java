@@ -66,14 +66,22 @@ public class ShopCommand {
                                         .executes(ctx -> {
                                             String id = StringArgumentType.getString(ctx, "id");
                                             String name = StringArgumentType.getString(ctx, "name");
+                                            if (!ShopConfigManager.isValidCategoryId(id)) {
+                                                ctx.getSource().sendFailure(Component.literal("§cInvalid category id! Use letters, numbers, '-' or '_'."));
+                                                return 0;
+                                            }
                                             ServerPlayer player = ctx.getSource().getPlayerOrException();
                                             ItemStack hand = player.getMainHandItem();
-                                            if(hand.isEmpty()) {
+                                            if (hand.isEmpty()) {
                                                 ctx.getSource().sendFailure(Component.literal("Hold an item in your hand for the icon!"));
                                                 return 0;
                                             }
-                                            String icon = ForgeRegistries.ITEMS.getKey(hand.getItem()).toString();
-                                            ShopConfigManager.get().addCategory(id, name, icon);
+                                            var key = ForgeRegistries.ITEMS.getKey(hand.getItem());
+                                            String icon = key != null ? key.toString() : "minecraft:barrier";
+                                            if (!ShopConfigManager.get().addCategory(id, name, icon)) {
+                                                ctx.getSource().sendFailure(Component.literal("§cA category with that ID already exists!"));
+                                                return 0;
+                                            }
                                             ctx.getSource().sendSuccess(() -> Component.literal("§aCategory created: " + name), true);
                                             return 1;
                                         }))))
@@ -87,14 +95,25 @@ public class ShopCommand {
                                                     String cat = StringArgumentType.getString(ctx, "category");
                                                     double buy = DoubleArgumentType.getDouble(ctx, "buy");
                                                     double sell = DoubleArgumentType.getDouble(ctx, "sell");
+                                                    if (!Double.isFinite(buy) || !Double.isFinite(sell)) {
+                                                        ctx.getSource().sendFailure(Component.literal("§cInvalid prices!"));
+                                                        return 0;
+                                                    }
                                                     ServerPlayer player = ctx.getSource().getPlayerOrException();
                                                     ItemStack hand = player.getMainHandItem();
                                                     if (hand.isEmpty()) {
                                                         ctx.getSource().sendFailure(Component.literal("Hold an item in your hand!"));
                                                         return 0;
                                                     }
-                                                    String itemId = ForgeRegistries.ITEMS.getKey(hand.getItem()).toString();
-                                                    ShopConfigManager.get().addItem(cat, itemId, buy, sell);
+                                                    var key = ForgeRegistries.ITEMS.getKey(hand.getItem());
+                                                    if (key == null) {
+                                                        ctx.getSource().sendFailure(Component.literal("§cUnknown item!"));
+                                                        return 0;
+                                                    }
+                                                    if (!ShopConfigManager.get().addItem(cat, key.toString(), buy, sell)) {
+                                                        ctx.getSource().sendFailure(Component.literal("§cCould not find category: " + cat));
+                                                        return 0;
+                                                    }
                                                     ctx.getSource().sendSuccess(() -> Component.literal("§aItem added to " + cat), true);
                                                     return 1;
                                                 })))))

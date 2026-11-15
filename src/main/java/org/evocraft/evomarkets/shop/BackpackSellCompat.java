@@ -116,8 +116,21 @@ public final class BackpackSellCompat {
         return removed;
     }
 
-    private static boolean isSellTarget(ItemStack stack, ItemStack target) {
-        return stack != null && !stack.isEmpty() && target != null && !target.isEmpty() && stack.getItem() == target.getItem();
+    public static boolean isSellTarget(ItemStack stack, ItemStack target) {
+        if (stack == null || stack.isEmpty() || target == null || target.isEmpty()) return false;
+        if (stack.getItem() != target.getItem()) return false;
+        if (stack.isDamageableItem() && stack.getDamageValue() != target.getDamageValue()) return false;
+        if (target.hasTag()) {
+            return ItemStack.isSameItemSameTags(stack, target);
+        }
+        if (stack.isEnchanted()) return false;
+        if (stack.hasTag()) {
+            var tag = stack.getTag();
+            if (tag != null && (tag.contains("BlockEntityTag") || tag.contains("StoredEnchantments") || tag.contains("Potion"))) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void addCuriosBackpacks(Player player, List<ItemStack> backpacks) {

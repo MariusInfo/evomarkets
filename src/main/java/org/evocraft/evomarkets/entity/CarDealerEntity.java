@@ -35,10 +35,10 @@ public class CarDealerEntity extends PathfinderMob {
     // AICI E MAGIA: Când dai click dreapta pe el!
     @Override
     protected InteractionResult mobInteract(Player player, InteractionHand hand) {
-        if (!this.level().isClientSide() && hand == InteractionHand.MAIN_HAND) {
-            String jsonData = CarShopManager.GSON.toJson(CarShopManager.shopData);
+        if (!this.level().isClientSide() && hand == InteractionHand.MAIN_HAND && player instanceof ServerPlayer sp && !sp.isSpectator()) {
+            String jsonData = CarShopManager.toJson();
             EvoMarketsPacketHandler.INSTANCE.send(
-                    PacketDistributor.PLAYER.with(() -> (ServerPlayer) player),
+                    PacketDistributor.PLAYER.with(() -> sp),
                     new EvoMarketsPacketHandler.S2C_OpenCarShop(jsonData)
             );
             return InteractionResult.SUCCESS;

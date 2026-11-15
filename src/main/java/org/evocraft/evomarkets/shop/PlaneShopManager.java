@@ -24,39 +24,85 @@ public class PlaneShopManager {
         }
     }
 
-    public static Map<String, List<PlanePart>> shopData = new HashMap<>();
+    public static final Map<String, List<PlanePart>> shopData = new HashMap<>();
 
     static {
-        shopData.put("BODY", new ArrayList<>());
-        shopData.put("ENGINE", new ArrayList<>());
-        shopData.put("ATTACHMENTS", new ArrayList<>());
+        ensureDefaultCategories(shopData);
     }
 
-    public static void load() {
+    private static void ensureDefaultCategories(Map<String, List<PlanePart>> map) {
+        map.computeIfAbsent("BODY", k -> new ArrayList<>());
+        map.computeIfAbsent("ENGINE", k -> new ArrayList<>());
+        map.computeIfAbsent("ATTACHMENTS", k -> new ArrayList<>());
+    }
+
+    public static synchronized void load() {
         if (!SAVE_FILE.exists()) return;
         try (Reader reader = new FileReader(SAVE_FILE)) {
             Map<String, List<PlanePart>> loaded = GSON.fromJson(reader, new TypeToken<Map<String, List<PlanePart>>>(){}.getType());
-            if (loaded != null) shopData = loaded;
+            ensureDefaultCategories(shopData);
+            if (loaded != null) {
+                for (Map.Entry<String, List<PlanePart>> entry : loaded.entrySet()) {
+                    String key = entry.getKey() != null ? entry.getKey().toUpperCase(Locale.ROOT) : "";
+                    if (!shopData.containsKey(key)) continue;
+                    List<PlanePart> clean = new ArrayList<>();
+                    if (entry.getValue() != null) {
+                        for (PlanePart part : entry.getValue()) {
+                            if (part == null || part.id == null || !Double.isFinite(part.price) || part.price < 0) continue;
+                            if (part.uuid == null || part.uuid.isBlank()) part.uuid = UUID.randomUUID().toString();
+                            if (part.name == null) part.name = "Part";
+                            clean.add(part);
+                        }
+                    }
+                    shopData.put(key, clean);
+                }
+            }
         } catch (Exception e) { e.printStackTrace(); }
     }
 
-    public static void save() {
-        try (Writer writer = new FileWriter(SAVE_FILE)) { GSON.toJson(shopData, writer); } catch (Exception e) { e.printStackTrace(); }
+    public static synchronized void save() {
+        try {
+            File parent = SAVE_FILE.getParentFile();
+            if (parent != null && !parent.exists()) parent.mkdirs();
+            try (Writer writer = new FileWriter(SAVE_FILE)) { GSON.toJson(shopData, writer); }
+        } catch (Exception e) { e.printStackTrace(); }
     }
 
-    public static void addPart(String category, String uuid, String itemId, String nbt, String name, double price) {
-        String catUpper = category.toUpperCase();
+    public static synchronized boolean hasCategory(String category) {
+        return category != null && shopData.containsKey(category.toUpperCase(Locale.ROOT));
+    }
+
+    public static synchronized String toJson() {
+        return GSON.toJson(shopData);
+    }
+
+    public static synchronized PlanePart findPart(String category, String uuid) {
+        if (category == null || uuid == null || uuid.isEmpty() || "none".equals(uuid)) return null;
+        List<PlanePart> parts = shopData.get(category.toUpperCase(Locale.ROOT));
+        if (parts == null) return null;
+        for (PlanePart part : parts) {
+            if (part != null && uuid.equals(part.uuid)) return part;
+        }
+        return null;
+    }
+
+    public static synchronized void addPart(String category, String uuid, String itemId, String nbt, String name, double price) {
+        if (category == null || itemId == null || !Double.isFinite(price) || price < 0) return;
+        String catUpper = category.toUpperCase(Locale.ROOT);
         if (shopData.containsKey(catUpper)) {
-            shopData.get(catUpper).add(new PlanePart(uuid, itemId, nbt, name, price));
+            String safeUuid = (uuid != null && !uuid.isBlank()) ? uuid : UUID.randomUUID().toString();
+            String safeName = name != null ? name : "Part";
+            shopData.get(catUpper).add(new PlanePart(safeUuid, itemId, nbt != null ? nbt : "", safeName, price));
             save();
         }
     }
 
-    public static boolean removePart(String category, String name) {
-        String catUpper = category.toUpperCase();
+    public static synchronized boolean removePart(String category, String name) {
+        if (category == null || name == null) return false;
+        String catUpper = category.toUpperCase(Locale.ROOT);
         if (shopData.containsKey(catUpper)) {
             List<PlanePart> parts = shopData.get(catUpper);
-            boolean removed = parts.removeIf(part -> part.name.equalsIgnoreCase(name));
+            boolean removed = parts.removeIf(part -> part != null && part.name != null && part.name.equalsIgnoreCase(name));
             if (removed) {
                 save();
                 return true;
